@@ -1,4 +1,6 @@
 from . import photos
+import platform
+from pathlib import Path
 
 def main_menu():
     # Main loop for the photo utility menu
@@ -39,7 +41,7 @@ def main_menu():
                     folder_path=folder_path,
                     include_subdirs=include_subdirs,
                     include_raw=include_raw,
-                    custom_suffix=custom_suffix,
+                    custom_suffix=custom_suffix if custom_suffix else None,
                     custom_date=custom_date
                 )
 
@@ -65,9 +67,37 @@ def main_menu():
                 )
 
         elif choice == '2':
-            # Option 2: Burn-in information (not yet implemented)
-            print("Feature not yet implemented: Burn-in Information to Photographs.")
-            # Placeholder for future implementation
+
+            image_path = input("Enter path to the image or folder: ").strip()
+            output_path = input("Enter output path (leave blank to overwrite original): ").strip()
+            custom_text = input("Enter any custom text (optional): ").strip()
+            use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
+
+            if use_custom_date:
+                custom_date = input("Enter date (YYYYMMDD): ").strip()
+            else:
+                custom_date = None
+
+            # Convert Windows path to WSL path if necessary
+            if platform.system() == 'Linux' and ':' in image_path and '\\' in image_path:
+                image_path = photos.convert_windows_path_to_wsl(image_path)
+
+            if output_path and platform.system() == 'Linux' and ':' in output_path and '\\' in output_path:
+                output_path = photos.convert_windows_path_to_wsl(output_path)
+
+            # Ask if folder and include_subdirs
+            include_subdirs = False
+            if Path(image_path).is_dir():
+                include_subdirs = input("Include subdirectories? (y/n): ").strip().lower() == 'y'
+
+            photos.burn_in_metadata(
+                image_path=image_path,
+                output_path=output_path if output_path else None,
+                text=custom_text if custom_text else None,
+                custom_date=custom_date,
+                include_subdirs=include_subdirs
+            )
+
 
         elif choice == '3':
             # Option 3: Exit the menu loop
