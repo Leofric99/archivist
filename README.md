@@ -1,13 +1,13 @@
 # archivist
 
-This script will fulfill all your archiving needs. From renaming and dating photographs to... de determined.
+This script will fulfill all your archiving needs. From renaming and dating photographs to... be determined. More tools to follow.
 
 ## Installation
 
 Clone the repository and install the required dependencies:
 
 ```bash
-git clone https://github.com/yourusername/archivist.git
+git clone https://github.com/Leofric99/archivist.git
 cd archivist
 pip install -r requirements.txt
 ```
