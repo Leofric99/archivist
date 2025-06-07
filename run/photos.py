@@ -26,10 +26,34 @@ DATETIME_KEYS = [
     'DateTimeCreated'
 ]
 
+METADATA_DATE_KEYS = [
+        'SubSecDateTimeOriginal',
+        'DateTimeOriginal',
+        'SubSecCreateDate',
+    ]
+
+import re
+import platform
+from datetime import datetime
+from pathlib import Path
+from PIL import Image
+from PIL.ExifTags import TAGS
+
+# Define these globally or pass them in if needed
+IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic']
+RAW_EXTENSIONS = ['.cr2', '.nef', '.arw', '.dng', '.rw2']
+DATETIME_KEYS = [
+    'SubSecDateTimeOriginal',
+    'DateTimeOriginal',
+    'SubSecCreateDate',
+    'CreateDate',
+    'DateTimeDigitized',
+    'DateTime',
+]
+
 def rename_digital(folder_path, include_subdirs=False, include_raw=False, custom_suffix="", custom_date=None):
 
     def convert_windows_path_to_wsl(path_str):
-        # Converts C:\Users\foo to /mnt/c/Users/foo
         match = re.match(r'^([A-Za-z]):\\', path_str)
         if match:
             drive_letter = match.group(1).lower()
@@ -58,19 +82,6 @@ def rename_digital(folder_path, include_subdirs=False, include_raw=False, custom
             pass
         return exif
 
-    def get_exif_date_taken(path):
-        try:
-            img = Image.open(path)
-            exif_data = get_exif_data(img)
-            for key in DATETIME_KEYS:
-                if key in exif_data:
-                    dt = parse_exif_datetime(exif_data[key])
-                    if dt:
-                        return dt
-        except Exception:
-            pass
-        return None
-
     def get_file_dates(path):
         stat = path.stat()
         try:
@@ -83,79 +94,125 @@ def rename_digital(folder_path, include_subdirs=False, include_raw=False, custom
             mtime = None
         return ctime, mtime
 
-    # Handle Windows paths if running under WSL or Linux
-    if platform.system() in ['Linux'] and ':' in folder_path and '\\' in folder_path:
+    def extract_datetime_from_filename(filename):
+        m_full = re.search(r'(\d{8})[_\-]?(\d{6})', filename)
+        if m_full:
+            try:
+                return datetime.strptime(m_full.group(1) + m_full.group(2), "%Y%m%d%H%M%S")
+            except Exception:
+                pass
+        m_date = re.search(r'(\d{8})', filename)
+        if m_date:
+            try:
+                return datetime.strptime(m_date.group(1), "%Y%m%d")
+            except Exception:
+                pass
+        return None
+
+    def get_metadata_datetime(exif_data):
+        for key in ['SubSecDateTimeOriginal', 'DateTimeOriginal', 'SubSecCreateDate']:
+            if key in exif_data:
+                dt = parse_exif_datetime(exif_data[key])
+                if dt:
+                    return dt
+        return None
+
+    if platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path:
         folder = convert_windows_path_to_wsl(folder_path)
     else:
         folder = Path(folder_path)
 
     folder = folder.resolve()
-
     if not folder.is_dir():
         raise ValueError(f"The provided path is not a valid directory: {folder}")
 
     files = folder.rglob('*') if include_subdirs else folder.iterdir()
-
     valid_extensions = IMAGE_EXTENSIONS + RAW_EXTENSIONS if include_raw else IMAGE_EXTENSIONS
     custom_suffix = '_'.join(custom_suffix.split()).lower() if custom_suffix else ""
+
+    base_name_to_files = {}
 
     for file_path in files:
         if not file_path.is_file() or file_path.suffix.lower() not in valid_extensions:
             continue
 
-        date_taken = get_exif_date_taken(file_path)
+        try:
+            img = Image.open(file_path)
+            exif_data = get_exif_data(img)
+        except Exception:
+            exif_data = {}
+
+        metadata_dt = get_metadata_datetime(exif_data)
+        metadata_has_priority_keys = metadata_dt is not None
+
+        filename_dt = extract_datetime_from_filename(file_path.name)
         ctime, mtime = get_file_dates(file_path)
 
-        # If custom_date is provided, use it for the date part, but still get time from metadata if available
         if custom_date:
-            # Parse custom_date (YYYYMMDD)
             try:
                 custom_date_obj = datetime.strptime(custom_date, "%Y%m%d")
             except Exception:
                 custom_date_obj = None
 
-            # Try to get time from exif or file times
-            time_part = None
-            if date_taken:
-                time_part = date_taken.strftime('%H%M%S')
-            elif mtime:
-                time_part = mtime.strftime('%H%M%S')
-            elif ctime:
-                time_part = ctime.strftime('%H%M%S')
-            else:
-                time_part = "000000"
+            time_part = (
+                metadata_dt.strftime('%H%M%S') if metadata_dt else
+                mtime.strftime('%H%M%S') if mtime else
+                ctime.strftime('%H%M%S') if ctime else
+                "000000"
+            )
 
-            if custom_date_obj:
-                base_name = f"{custom_date_obj.strftime('%Y%m%d')}_{time_part}"
-            else:
-                base_name = f"{custom_date}_{time_part}"
+            base_name = f"{custom_date_obj.strftime('%Y%m%d') if custom_date_obj else custom_date}_{time_part}"
+
         else:
-            if date_taken:
-                chosen_date = date_taken
-            elif mtime:
-                chosen_date = mtime
-            elif ctime:
-                chosen_date = ctime
+            if filename_dt and not metadata_has_priority_keys:
+                if filename_dt.hour == 0 and filename_dt.minute == 0 and filename_dt.second == 0:
+                    time_part = (
+                        metadata_dt.strftime('%H%M%S') if metadata_dt else
+                        mtime.strftime('%H%M%S') if mtime else
+                        ctime.strftime('%H%M%S') if ctime else
+                        "000000"
+                    )
+                    base_name = f"{filename_dt.strftime('%Y%m%d')}_{time_part}"
+                else:
+                    base_name = filename_dt.strftime('%Y%m%d_%H%M%S')
             else:
-                base_name = "00000000_000000"
-
-            if date_taken or mtime or ctime:
-                base_name = chosen_date.strftime('%Y%m%d_%H%M%S')
+                chosen_dt = metadata_dt or mtime or ctime
+                base_name = chosen_dt.strftime('%Y%m%d_%H%M%S') if chosen_dt else "00000000_000000"
 
         if custom_suffix:
             base_name = f"{base_name}_{custom_suffix}"
 
-        new_name = f"{base_name}{file_path.suffix.lower()}"
-        new_path = file_path.with_name(new_name)
+        base_name_to_files.setdefault(base_name, []).append(file_path)
 
-        counter = 1
-        while new_path.exists():
-            new_name = f"{base_name} ({counter}){file_path.suffix.lower()}"
+    for base_key, file_list in base_name_to_files.items():
+        if len(file_list) == 1:
+            file_path = file_list[0]
+            new_name = f"{base_key}{file_path.suffix.lower()}"
             new_path = file_path.with_name(new_name)
-            counter += 1
 
-        print(f"Renaming '{file_path.name}' to '{new_name}'")
-        file_path.rename(new_path)
+            counter = 1
+            while new_path.exists():
+                new_name = f"{base_key} ({counter}){file_path.suffix.lower()}"
+                new_path = file_path.with_name(new_name)
+                counter += 1
+
+            print(f"Renaming '{file_path.name}' to '{new_name}'")
+            file_path.rename(new_path)
+
+        else:
+            counter = 1
+            for file_path in file_list:
+                new_name = f"{base_key}_{counter}{file_path.suffix.lower()}"
+                new_path = file_path.with_name(new_name)
+
+                while new_path.exists():
+                    counter += 1
+                    new_name = f"{base_key}_{counter}{file_path.suffix.lower()}"
+                    new_path = file_path.with_name(new_name)
+
+                print(f"Renaming '{file_path.name}' to '{new_name}'")
+                file_path.rename(new_path)
+                counter += 1
 
 
 def rename_film(folder_path, include_subdirs=False, include_raw=False, custom_suffix="", custom_date=None):
