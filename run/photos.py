@@ -29,7 +29,8 @@ def burn_in_metadata():
         m = re.match(r'^([A-Za-z]):\\', path_str)
         if m:
             drive = m.group(1).lower()
-            return f"/mnt/{drive}/{path_str[3:].replace('\\', '/')}"
+            replaced = path_str[3:].replace('\\', '/')
+            return f"/mnt/{drive}/{replaced}"
         return path_str
 
     if platform.system() == 'Linux' and ':' in image_path and '\\' in image_path:
