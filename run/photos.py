@@ -137,7 +137,8 @@ def rename_digital():
         m = re.match(r'^([A-Za-z]):\\', path_str)
         if m:
             drive = m.group(1).lower()
-            return f"/mnt/{drive}/{path_str[3:].replace('\\', '/')}"
+            replaced = path_str[3:].replace('\\', '/')
+            return f"/mnt/{drive}/{replaced}"
         return path_str
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
@@ -225,7 +226,8 @@ def rename_film():
         m = re.match(r'^([A-Za-z]):\\', path_str)
         if m:
             drive = m.group(1).lower()
-            return f"/mnt/{drive}/{path_str[3:].replace('\\', '/')}"
+            replaced = path_str[3:].replace('\\', '/')
+            return f"/mnt/{drive}/{replaced}"
         return path_str
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
