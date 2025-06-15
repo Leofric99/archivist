@@ -72,6 +72,11 @@ def main():
                 custom_date = input("Enter date (YYYYMMDD): ").strip()
             else:
                 custom_date = None
+            include_video = input("Include videos? (y/n): ").strip().lower() == 'y'
+            if include_video == 'n':
+                include_video = False
+            elif include_video == 'y':
+                include_video = True
 
             # Call the rename function from the photos module with user parameters
             photos.rename_digital(
@@ -79,7 +84,8 @@ def main():
             include_subdirs=include_subdirs,
             include_raw=include_raw,
             custom_suffix=custom_suffix,
-            custom_date=custom_date
+            custom_date=custom_date,
+            include_videos=include_video
             )
 
     # If the user selects option 2 for burning in metadata
@@ -88,7 +94,12 @@ def main():
         # Collect user inputs for burning in metadata
         image_path = input("Enter path to the image or folder: ").strip()
         output_path = input("Enter output path (leave blank to overwrite original): ").strip()
-        custom_text = input("Enter any custom text (optional): ").strip()
+        per_photo_suffix = input("Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
+        if per_photo_suffix == 'y':
+            per_photo_suffix = True
+        elif per_photo_suffix == 'n':
+            per_photo_suffix = False
+            custom_text = input("Enter custom text to burn in to all photos: ").strip()
         use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
         if use_custom_date:
             custom_date = input("Enter date (YYYYMMDD): ").strip()
@@ -111,9 +122,10 @@ def main():
         photos.burn_in_metadata(
             image_path=image_path,
             output_path=output_path if output_path else None,
-            text=custom_text if custom_text else None,
+            text=custom_text if 'custom_text' in locals() and custom_text else None,
             custom_date=custom_date,
-            include_subdirs=include_subdirs
+            include_subdirs=include_subdirs,
+            per_photo_suffix=per_photo_suffix
         )
 
     # If the user selects option 3 to...

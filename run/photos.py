@@ -2,15 +2,28 @@ import os
 import platform
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps
+import matplotlib.pyplot as plt
 from datetime import datetime
 from PIL.ExifTags import TAGS
 import warnings
 import re
+import numpy as np
+import cv2
+import shutil
+import sys
+import termios
+import tty
+import threading
 
+# Disable PIL's decompression bomb protection (remove pixel limit)
+from PIL import Image as PILImage
+PILImage.MAX_IMAGE_PIXELS = None
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
 IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.tiff', '.heic', '.bmp']
+IMAGE_EXTENSIONS_LOWER = [ext.lower() for ext in IMAGE_EXTENSIONS]
 RAW_EXTENSIONS = ['.cr2', '.nef', '.arw', '.rw2', '.dng', '.tif']
+VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.mts', '.m2ts', '.3gp', '.webm']
 
 
 def sanitize_filename(filename):
@@ -80,13 +93,36 @@ def convert_windows_path_to_wsl(path_str):
     return Path(path_str)
 
 
-def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, custom_date=None, include_subdirs=False):
+def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, custom_date=None, include_subdirs=False, per_photo_suffix=False):
     def ordinal(n):
         if 10 <= n % 100 <= 20:
             suffix = 'th'
         else:
             suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
         return f"{n}{suffix}"
+
+    def format_custom_date(date_str):
+        if not date_str:
+            return ""
+        if re.fullmatch(r"\d{8}", date_str):
+            # YYYYMMDD
+            try:
+                dt = datetime.strptime(date_str, "%Y%m%d")
+                return f"{ordinal(dt.day)} {dt.strftime('%B')} {dt.year}"
+            except Exception:
+                return date_str
+        elif re.fullmatch(r"\d{6}", date_str):
+            # YYYYMM
+            try:
+                dt = datetime.strptime(date_str, "%Y%m")
+                return f"{dt.strftime('%B')} {dt.year}"
+            except Exception:
+                return date_str
+        elif re.fullmatch(r"\d{4}", date_str):
+            # YYYY
+            return date_str
+        else:
+            return date_str
 
     def format_datetime(dt):
         if not dt:
@@ -96,7 +132,7 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
         year = dt.year
         return f"{ordinal(day)} {month} {year}"
 
-    def process_image(in_path, out_path):
+    def process_image(in_path, out_path, custom_text=None):
         try:
             img = Image.open(in_path)
             img = ImageOps.exif_transpose(img)  # <-- Correct orientation
@@ -119,16 +155,15 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
             else:
                 ctime, mtime = get_file_dates(in_path)
                 dt_obj = mtime or ctime
+
         if custom_date:
-            try:
-                dt_obj = datetime.strptime(custom_date, "%Y%m%d")
-            except Exception:
-                pass
-        timestamp = format_datetime(dt_obj)
-        display_text = f"{timestamp}{f' | {text}' if text else ''}"
+            timestamp = format_custom_date(custom_date)
+        else:
+            timestamp = format_datetime(dt_obj)
+
+        display_text = f"{timestamp}{f' | {custom_text}' if custom_text else ''}"
         txt_overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
         draw = ImageDraw.Draw(txt_overlay)
-        # Increase font size multiplier from 0.035 to 0.045 for slightly larger text
         font_size = int(min(img.size) * 0.045)
         try:
             font = ImageFont.truetype("arial.ttf", font_size)
@@ -137,13 +172,11 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
         text_bbox = draw.textbbox((0, 0), display_text, font=font)
         pos = (img.width - (text_bbox[2] - text_bbox[0]) - int(min(img.size)*0.01),
                img.height - (text_bbox[3] - text_bbox[1]) - int(min(img.size)*0.01))
-        # Draw black outline (1-2 pixels thick)
         outline_range = 1  # 1 pixel thick
         for dx in range(-outline_range, outline_range + 1):
             for dy in range(-outline_range, outline_range + 1):
                 if (dx != 0 or dy != 0) and abs(dx) + abs(dy) <= 2:
                     draw.text((pos[0] + dx, pos[1] + dy), display_text, font=font, fill=(0, 0, 0, 255))
-        # Draw white text
         draw.text(pos, display_text, font=font, fill=(255, 255, 255, 160))
         combined = Image.alpha_composite(img, txt_overlay).convert("RGB")
         out_file = Path(out_path).with_name(sanitize_filename(Path(out_path).name))
@@ -154,9 +187,11 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
     if not path.exists():
         print(f"Path not found: {image_path}")
         return
+
     if path.is_dir():
         output_folder = Path(output_path) if output_path else None
-        if output_folder: output_folder.mkdir(parents=True, exist_ok=True)
+        if output_folder:
+            output_folder.mkdir(parents=True, exist_ok=True)
         files = path.rglob('*') if include_subdirs else path.glob('*')
         images = [p for p in files if p.suffix.lower() in ['.jpg', '.jpeg', '.png']]
         if not images:
@@ -164,31 +199,50 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
             return
         for img_path in images:
             out_file = (output_folder / img_path.name) if output_folder else img_path
-            process_image(img_path, out_file)
+            if per_photo_suffix:
+                try:
+                    custom_text = input(f"Enter custom suffix for '{img_path.name}' (leave blank for none): ").strip()
+                except EOFError:
+                    custom_text = ""
+                process_image(img_path, out_file, custom_text if custom_text else None)
+            else:
+                process_image(img_path, out_file, text)
     else:
         if not path.suffix.lower() in [".jpg", ".jpeg", ".png"]:
             print(f"File is not a supported image: {image_path}")
             return
         out_file = Path(output_path) if output_path else path
-        process_image(path, out_file)
+        if per_photo_suffix:
+            try:
+                custom_text = input(f"Enter custom suffix for '{path.name}' (leave blank for none): ").strip()
+            except EOFError:
+                custom_text = ""
+            process_image(path, out_file, custom_text if custom_text else None)
+        else:
+            process_image(path, out_file, text)
 
 
-def rename_digital(folder_path, include_subdirs=False, include_raw=False, custom_suffix="", custom_date=None):
+def rename_digital(folder_path, include_subdirs=False, include_raw=False, custom_suffix="", custom_date=None, include_videos=True):
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else Path(folder_path)
     folder = folder.resolve()
     if not folder.is_dir():
         raise ValueError(f"Not a directory: {folder}")
     files = folder.rglob('*') if include_subdirs else folder.iterdir()
     valid_exts = IMAGE_EXTENSIONS + RAW_EXTENSIONS if include_raw else IMAGE_EXTENSIONS
+    if include_videos:
+        valid_exts = valid_exts + VIDEO_EXTENSIONS
     custom_suffix = '_'.join(custom_suffix.split()).lower() if custom_suffix else ""
     base_name_to_files = {}
     for file_path in files:
         if not file_path.is_file() or file_path.suffix.lower() not in valid_exts:
             continue
-        try:
-            exif_data = get_exif_data(Image.open(file_path))
-        except Exception:
-            exif_data = {}
+        exif_data = {}
+        # Only try EXIF for images
+        if file_path.suffix.lower() in IMAGE_EXTENSIONS + RAW_EXTENSIONS:
+            try:
+                exif_data = get_exif_data(Image.open(file_path))
+            except Exception:
+                exif_data = {}
         new_basename = find_datetime_for_file(file_path, exif_data, custom_date)
         if custom_suffix: new_basename += f"_{custom_suffix}"
         base_name_to_files.setdefault(new_basename, []).append(file_path)
@@ -255,3 +309,4 @@ def rename_film(folder_path, include_subdirs=False, include_raw=False, custom_su
             print(f"Renamed {file_path.name} -> {new_name}")
         except Exception as e:
             print(f"Failed to rename {file_path.name}: {e}")
+
