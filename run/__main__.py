@@ -92,12 +92,13 @@ def main():
     elif main_choice == '2':
 
         # Collect user inputs for burning in metadata
+        custom_text = ""
         image_path = input("Enter path to the image or folder: ").strip()
         output_path = input("Enter output path (leave blank to overwrite original): ").strip()
         per_photo_suffix = input("Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
         if per_photo_suffix == 'y':
             per_photo_suffix = True
-        elif per_photo_suffix == 'n':
+        else:
             per_photo_suffix = False
             custom_text = input("Enter custom text to burn in to all photos: ").strip()
         use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
