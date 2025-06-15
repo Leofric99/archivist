@@ -183,14 +183,32 @@ def rename_digital():
             base = "00000000_000000"
         if custom_suffix: base += f"_{custom_suffix}"
         base_name_to_files.setdefault(base, []).append(file_path)
+
+    # Preview changes
+    preview = []
     for base, files_list in base_name_to_files.items():
         files_list = sorted(files_list)
         for idx, file_path in enumerate(files_list, start=1):
             suffix = file_path.suffix.lower()
             new_name = f"{base}{f'_{idx}' if len(files_list) > 1 else ''}{suffix}"
             new_path = file_path.with_name(new_name)
-            try: file_path.rename(new_path); print(f"Renamed {file_path.name} -> {new_name}")
-            except Exception as e: print(f"Failed to rename {file_path.name}: {e}")
+            preview.append((file_path, new_path))
+
+    print("\nPlanned renames:")
+    for old, new in preview:
+        print(f"{old.name} -> {new.name}")
+
+    confirm = input("\nProceed with renaming? (y/n): ").strip().lower()
+    if confirm != 'y':
+        print("Aborted.")
+        return
+
+    for old, new in preview:
+        try:
+            old.rename(new)
+            print(f"Renamed {old.name} -> {new.name}")
+        except Exception as e:
+            print(f"Failed to rename {old.name}: {e}")
 
 def rename_film():
     folder_path = input("Enter folder path: ").strip()
