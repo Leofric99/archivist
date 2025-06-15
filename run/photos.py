@@ -1,7 +1,7 @@
 import os
 import platform
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps
 from datetime import datetime
 from PIL.ExifTags import TAGS
 import warnings
@@ -98,7 +98,9 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
 
     def process_image(in_path, out_path):
         try:
-            img = Image.open(in_path).convert("RGBA")
+            img = Image.open(in_path)
+            img = ImageOps.exif_transpose(img)  # <-- Correct orientation
+            img = img.convert("RGBA")
         except Exception as e:
             print(f"Error opening image {in_path}: {e}")
             return
@@ -149,15 +151,24 @@ def burn_in_metadata(image_path, output_path=None, text=None, exif_data=None, cu
         print(f"Burned-in metadata to {out_file}")
 
     path = Path(image_path)
+    if not path.exists():
+        print(f"Path not found: {image_path}")
+        return
     if path.is_dir():
         output_folder = Path(output_path) if output_path else None
         if output_folder: output_folder.mkdir(parents=True, exist_ok=True)
-        patterns = ["*.jpg", "*.jpeg", "*.png"]
-        images = [p for pat in patterns for p in (path.rglob(pat) if include_subdirs else path.glob(pat))]
+        files = path.rglob('*') if include_subdirs else path.glob('*')
+        images = [p for p in files if p.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+        if not images:
+            print(f"No images found in {image_path}")
+            return
         for img_path in images:
             out_file = (output_folder / img_path.name) if output_folder else img_path
             process_image(img_path, out_file)
     else:
+        if not path.suffix.lower() in [".jpg", ".jpeg", ".png"]:
+            print(f"File is not a supported image: {image_path}")
+            return
         out_file = Path(output_path) if output_path else path
         process_image(path, out_file)
 

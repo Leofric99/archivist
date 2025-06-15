@@ -26,10 +26,12 @@ def main():
     if main_choice == '1':
 
         # Determine if the user is working with Film or Digital photographs
-        film_or_digital = input("Is this for Film or Digital photographs? (f/d): ").strip().lower()
-        if film_or_digital not in ('f', 'd'):
-            print("Invalid selection. Please choose 'f' for Film or 'd' for Digital.")
-            continue
+        while True:
+            film_or_digital = input("Is this for Film or Digital photographs? (f/d): ").strip().lower()
+            if film_or_digital not in ('f', 'd'):
+                print("Invalid selection. Please choose 'f' for Film or 'd' for Digital.")
+                continue
+            break
         
         # If the user is working with Film photographs
         if film_or_digital == 'f':
@@ -118,7 +120,7 @@ def main():
     elif main_choice == '3':
         # Option 3: Exit the menu loop
         print("Exiting. More features coming soon...")
-        break
+        return
 
     # If the user selects an invalid option
     else:
@@ -127,4 +129,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main_menu()
+    main()
