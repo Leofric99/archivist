@@ -98,14 +98,14 @@ You can rewrite image metadata from a previously exported CSV or JSON file:
 
 #### Restructuring Folders
 
-You can reorganise your photo and video files into a structured folder hierarchy based on their filenames and dates:
+You can reorganise your photo and video files into a structured hierarchy based on filenames and dates:
 
 - Choose "Restructure Folder Structure" from the menu.
-- Enter the source directory containing your photos and videos.
-- The script will check that all files conform to the standard naming scheme (e.g., `YYYYMMDD_HHMMSS_suffix.ext`).
-- If all files are named correctly, you will be prompted for a root directory where the reorganised folders will be created.
-- The script will group files by decade, year, and by a suffix if there are enough files with the same suffix (default is 10). Files without a suffix are further organised into monthly subfolders.
-- All files are copied (not moved) into the new structure. The contents of the target root directory will be deleted before restructuring.
+- Enter the source directory.
+- The script checks that files use the standard naming scheme (e.g., `YYYYMMDD_HHMMSS_suffix.ext`).
+- If valid, you'll be prompted for a target root directory (which will be cleared before use).
+- Files are grouped by decade, year, and—if enough files share a suffix—by event folders. The minimum number of files for an event folder is customisable in `run/config.py` (`EVENT_FOLDER_THRESHOLD`, default: 10). Files without a suffix are organised by month.
+- All files are copied (not moved) into the new structure.
 
-> **Warning:** The target root directory (which should be empty to begin with) will be cleared before files are copied. Make sure to back up
+> **Warning:** The target root directory will be deleted before restructuring. Back up any important data first.
 

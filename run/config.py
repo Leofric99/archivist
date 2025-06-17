@@ -3,7 +3,10 @@
 Configuration options for the run module, including file extensions and EXIF tag mappings.
 '''
 
-IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.tiff', '.heic', '.bmp']
+# Determines the minimum number of photos required to create an event folder when restructuring folders.
+EVENT_FOLDER_THRESHOLD = 10
+
+IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.tiff', '.heic', '.bmp', '.png', '.gif']
 RAW_EXTENSIONS = ['.cr2', '.nef', '.arw', '.rw2', '.dng', '.tif']
 VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.mts', '.m2ts', '.3gp', '.webm']
 EXIF_TAG_MAP = {
