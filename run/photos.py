@@ -1,3 +1,4 @@
+from .config import IMAGE_EXTENSIONS, RAW_EXTENSIONS, VIDEO_EXTENSIONS, EXIF_TAG_MAP
 import platform
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags, TiffImagePlugin
@@ -14,10 +15,6 @@ import pyexiv2
 
 Image.MAX_IMAGE_PIXELS = None # Disable the limit on image size to prevent DecompressionBombError
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
-
-IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.tiff', '.heic', '.bmp']
-RAW_EXTENSIONS = ['.cr2', '.nef', '.arw', '.rw2', '.dng', '.tif']
-VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.mts', '.m2ts', '.3gp', '.webm']
 
 
 ################### SUPPORTING FUNCTIONS ###################
@@ -362,20 +359,20 @@ def export_metadata() -> None:
         print("Unknown format. Please choose 'csv', 'json', or 'both'.")
 
 
-def rewrite_metadata_from_file() -> None:
+def import_metadata() -> None:
     print("\n" + "═" * 50)
     print("✏️  Rewrite Metadata from File (using pyexiv2)  ✏️".center(50))
     print("═" * 50)
     meta_path = input(" Enter path to metadata file (CSV or JSON): ").strip()
     meta_file = Path(meta_path).expanduser().resolve()
     if not meta_file.exists():
-        print(f"❌  File not found: {meta_file}")
+        print(f"File not found: {meta_file}")
         return
     if meta_file.suffix.lower() not in ['.csv', '.json']:
-        print("❌  File must be a .csv or .json")
+        print("File must be a .csv or .json")
         return
 
-    print(f"✅  Found metadata file: {meta_file}")
+    print(f"Found metadata file: {meta_file}")
     confirm = input("Is this the correct file? (y/n): ").strip().lower()
     if confirm != 'y':
         print("Aborted.")
@@ -400,10 +397,10 @@ def rewrite_metadata_from_file() -> None:
                 metadata_list.append(row)
 
     # Ask for folder containing images
-    img_folder = input(" 📁  Enter folder containing images to update: ").strip()
+    img_folder = input("Enter folder containing images to update: ").strip()
     img_folder = Path(img_folder).expanduser().resolve()
     if not img_folder.is_dir():
-        print(f"❌  Not a directory: {img_folder}")
+        print(f"Not a directory: {img_folder}")
         return
 
     # Build lookup for images in folder
@@ -421,20 +418,31 @@ def rewrite_metadata_from_file() -> None:
         xmp_data = meta.get('XMP Data', {})
 
         try:
-            img = pyexiv2.Image(str(img_path))
-            img.read_metadata()
-            # Overwrite EXIF
-            for tag, value in exif_data.items():
-                img[tag] = value
-            # Overwrite IPTC
-            for tag, value in iptc_data.items():
-                img[tag] = value
-            # Overwrite XMP
-            for tag, value in xmp_data.items():
-                img[tag] = value
-            img.write_metadata()
-            print(f"Updated all metadata for {fname}")
-            updated += 1
+            with pyexiv2.Image(str(img_path)) as meta_img:
+                # Overwrite EXIF
+                for tag, value in exif_data.items():
+                    exif_key = EXIF_TAG_MAP.get(tag)
+                    if exif_key:
+                        try:
+                            meta_img.modify_exif({exif_key: value})
+                        except Exception as ex:
+                            print(f"  Failed to set EXIF tag {tag} ({exif_key}): {ex}")
+                    else:
+                        print(f"  Skipping unknown EXIF tag {tag}")
+                # Overwrite IPTC
+                for tag, value in iptc_data.items():
+                    try:
+                        meta_img.modify_iptc({tag: value})
+                    except Exception as ex:
+                        print(f"  Failed to set IPTC tag {tag}: {ex}")
+                # Overwrite XMP
+                for tag, value in xmp_data.items():
+                    try:
+                        meta_img.modify_xmp({tag: value})
+                    except Exception as ex:
+                        print(f"  Failed to set XMP tag {tag}: {ex}")
+                print(f"Updated all metadata for {fname}")
+                updated += 1
         except Exception as e:
             print(f"Failed to update {fname}: {e}")
 

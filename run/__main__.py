@@ -66,6 +66,8 @@ def main() -> None:
                 elif photos_choice == '3':
                     photos.export_metadata()
                 elif photos_choice == '4':
+                    photos.import_metadata()
+                elif photos_choice == '6':
                     break
                 elif photos_choice == '5':
                     print("👋  Exiting the Archivist Utility. Goodbye!")
