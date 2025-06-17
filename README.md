@@ -33,9 +33,7 @@ sudo apt-get install libexiv2-dev libinih-dev
 
 ## Running the Script
 
-This script performs the main execution logic for the project.
-
-To run the script, use:
+To run the script, and view the main menu, use:
 
 ```bash
 python3 -m run
@@ -58,6 +56,8 @@ You can rename your photo files for better organization, using either the date f
   Choose "Rename Photographs to Standard Format", select "Film", and enter the date when prompted (since film scans usually lack metadata). The script will use this date for renaming.
 
 Both options let you include subfolders, RAW files, and add a custom suffix to filenames. Duplicate filenames are avoided by adding counters.
+
+> **Note:** Supported file extensions and EXIF tag mappings are managed in `run/config.py`.
 
 #### Burning In Metadata
 
@@ -89,5 +89,6 @@ You can rewrite image metadata from a previously exported CSV or JSON file:
 - Confirm the file and specify the folder containing the images to update.
 - The script will attempt to update EXIF, IPTC, and XMP metadata for matching files.
 
-> **Note:** For full metadata support, ensure all system dependencies are installed as described above.
+> **Note:** For full metadata support, ensure all system dependencies are installed as described above.  
+> The mapping of EXIF tags to their internal names is handled in `run/config.py` and does not require alteration.
 
