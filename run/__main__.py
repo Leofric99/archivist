@@ -1,4 +1,5 @@
 from . import photos
+from . import videos
 
 
 ############# Supporting Functions #############
@@ -23,7 +24,8 @@ def main_menu() -> str:
     print("📦  Welcome to the Archivist Utility!  📦".center(50))
     print("═" * 50)
     print(" 1. Photographs")
-    print(" 2. Exit (More options coming soon!)")
+    print(" 2. Videos")
+    print(" 3. Exit (More options coming soon!)")
     print("═" * 50)
     return input(" Select an option (1 - 2): ").strip()
 
@@ -48,13 +50,29 @@ def photos_menu() -> str:
         print("❌  Invalid selection. Please choose 1, 2, 3, 4, 5, 6, or 7.")
 
 
+def videos_menu() -> str:
+    print("\n" + "═" * 50)
+    print("🎥  Video Menu  🎥".center(50))
+    print("═" * 50)
+    print(" 1. Burn-in Metadata to Videos")
+    print(" 2. Back to Main Menu")
+    print(" 3. Exit the Archivist Utility")
+    print("═" * 50)
+    
+    while True:
+        choice = input(" Select an option (1-3): ").strip()
+        if choice in ('1', '2', '3'):
+            return choice
+        print("❌  Invalid selection. Please choose 1, 2, or 3.")
+
+
 ################ Main Function ################
 
 
 def main() -> None:
     while True:
         choice = main_menu()
-        if choice == '2':
+        if choice == '3':
             print("👋  Exiting the Archivist Utility. Goodbye!")
             exit()
         elif choice == '1':
@@ -74,6 +92,17 @@ def main() -> None:
                     print("Returning to the Main Menu...")
                     break
                 elif photos_choice == '7':
+                    print("👋  Exiting the Archivist Utility. Goodbye!")
+                    exit()
+        elif choice == '2':
+            while True:
+                videos_choice = videos_menu()
+                if videos_choice == '1':
+                    videos.burn_in_metadata_video()
+                elif videos_choice == '2':
+                    print("Returning to the Main Menu...")
+                    break
+                elif videos_choice == '3':
                     print("👋  Exiting the Archivist Utility. Goodbye!")
                     exit()
         else:
