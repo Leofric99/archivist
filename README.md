@@ -29,6 +29,10 @@ sudo apt-get update
 sudo apt-get install libexiv2-dev libinih-dev
 ```
 
+#### Windows
+
+While running on Windows should be possible, I recommend using WSL.
+
 > If you encounter issues with `pyexiv2`, ensure both `exiv2` and `inih` libraries are installed and available on your system.
 
 ## Running the Script
