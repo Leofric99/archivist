@@ -30,24 +30,25 @@ def main_menu() -> str:
 
 def photos_menu() -> str:
     print("\n" + "═" * 50)
-    print("🖼️  Photograph Type Menu  🖼️".center(50))
+    print("🖼️  Photograph Menu  🖼️".center(50))
     print("═" * 50)
     print(" 1. Rename Photographs to Standard Format")
     print(" 2. Burn-in Information to Photographs")
     print(" 3. Export Image Metadata to a CSV or JSON File")
     print(" 4. Import Image Metadata from a CSV or JSON File")
-    print(" 5. Back to Main Menu")
-    print(" 6. Exit the Archivist Utility")
+    print(" 5. Restructure Folder Structure")
+    print(" 6. Back to Main Menu")
+    print(" 7. Exit the Archivist Utility")
     print("═" * 50)
 
     while True:
-        choice = input(" Select an option (1-6): ").strip()
-        if choice in ('1', '2', '3', '4', '5', '6'):
+        choice = input(" Select an option (1-7): ").strip()
+        if choice in ('1', '2', '3', '4', '5', '6', '7'):
             return choice
-        print("❌  Invalid selection. Please choose 1, 2, 3, 4, 5, or 6.")
+        print("❌  Invalid selection. Please choose 1, 2, 3, 4, 5, 6, or 7.")
 
 
-################ Main Function #############
+################ Main Function ################
 
 
 def main() -> None:
@@ -55,7 +56,7 @@ def main() -> None:
         choice = main_menu()
         if choice == '2':
             print("👋  Exiting the Archivist Utility. Goodbye!")
-            break
+            exit()
         elif choice == '1':
             while True:
                 photos_choice = photos_menu()
@@ -67,11 +68,14 @@ def main() -> None:
                     photos.export_metadata()
                 elif photos_choice == '4':
                     photos.import_metadata()
-                elif photos_choice == '6':
-                    break
                 elif photos_choice == '5':
+                    photos.restructure_folders()
+                elif photos_choice == '6':
+                    print("Returning to the Main Menu...")
+                    break
+                elif photos_choice == '7':
                     print("👋  Exiting the Archivist Utility. Goodbye!")
-                    return
+                    exit()
         else:
             print("❌  Invalid selection. Please choose 1 or 2.")
 

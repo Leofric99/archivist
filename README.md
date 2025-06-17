@@ -51,7 +51,7 @@ Make sure you have all required dependencies installed before running the script
 
 #### Renaming
 
-You can rename your photo files for better organization, using either the date from the photo's metadata (for digital photos) or a date you provide (for scanned film photos):
+You can rename your photo files for better organisation, using either the date from the photo's metadata (for digital photos) or a date you provide (for scanned film photos):
 
 - **Digital photos:**  
   Choose "Rename Photographs to Standard Format" from the menu, select "Digital", and follow the prompts. The script will automatically extract the date from EXIF metadata, filenames, or file timestamps.
@@ -95,4 +95,17 @@ You can rewrite image metadata from a previously exported CSV or JSON file:
 
 > **Note:** For full metadata support, ensure all system dependencies are installed as described above.  
 > The mapping of EXIF tags to their internal names is handled in `run/config.py` and does not require alteration.
+
+#### Restructuring Folders
+
+You can reorganise your photo and video files into a structured folder hierarchy based on their filenames and dates:
+
+- Choose "Restructure Folder Structure" from the menu.
+- Enter the source directory containing your photos and videos.
+- The script will check that all files conform to the standard naming scheme (e.g., `YYYYMMDD_HHMMSS_suffix.ext`).
+- If all files are named correctly, you will be prompted for a root directory where the reorganised folders will be created.
+- The script will group files by decade, year, and by a suffix if there are enough files with the same suffix (default is 10). Files without a suffix are further organised into monthly subfolders.
+- All files are copied (not moved) into the new structure. The contents of the target root directory will be deleted before restructuring.
+
+> **Warning:** The target root directory (which should be empty to begin with) will be cleared before files are copied. Make sure to back up
 

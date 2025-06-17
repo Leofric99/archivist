@@ -7,7 +7,8 @@ import warnings
 import re
 import csv
 import json
-import pyexiv2
+import shutil
+from collections import defaultdict
 
 
 #################### CONFIGURATION ################
@@ -447,3 +448,162 @@ def import_metadata() -> None:
             print(f"Failed to update {fname}: {e}")
 
     print(f"Done. Updated {updated} files.")
+
+
+# Restructure photo/video folders based on naming conventions and date
+def restructure_folders() -> None:
+    print("\n" + "═" * 50)
+    print("📁  Restructure Photo/Video Folders  📁".center(50))
+    print("═" * 50)
+    src_dir = input("Enter path to source photo/video directory: ").strip()
+    src_dir = Path(src_dir).expanduser().resolve()
+    if not src_dir.is_dir():
+        print(f"Not a directory: {src_dir}")
+        return
+
+    # Regex for standard naming, allowing optional _X at the end (X is a number)
+    pattern1 = re.compile(r'^\d{8}_\d{6}(?:_([a-z0-9]+))?(?:_\d+)?\.[a-z0-9]+$', re.IGNORECASE)
+    pattern2 = re.compile(r'^\d{6}_\d{6}(?:_\d+)?\.[a-z0-9]+$', re.IGNORECASE)
+
+    # Gather all files, but exclude any files that are inside the root_dir (to avoid deleting source files)
+    all_exts = set(IMAGE_EXTENSIONS + RAW_EXTENSIONS + VIDEO_EXTENSIONS + ['.psd'])
+    files = [
+        f for f in src_dir.rglob('*')
+        if f.is_file()
+        and f.suffix.lower() in all_exts
+    ]
+
+    nonconforming = [f for f in files if not (pattern1.match(f.name) or pattern2.match(f.name))]
+    if nonconforming:
+        print("❌ The following files do not conform to the standard naming scheme:")
+        for f in nonconforming:
+            print(f"  {f}")
+        print("Please rename these files before restructuring.")
+        return
+
+    # Ask for root folder only after confirming all files conform
+    root_dir = input("Enter path to root folder for restructured files: ").strip()
+    root_dir = Path(root_dir).expanduser().resolve()
+    print(f"\nWARNING: All contents of {root_dir} will be deleted!")
+    confirm = input("Proceed? (y/n): ").strip().lower()
+    if confirm != 'y':
+        print("Aborted.")
+        return
+    confirm2 = input("Are you absolutely sure? (y/n): ").strip().lower()
+    if confirm2 != 'y':
+        print("Aborted.")
+        return
+
+    # Save the list of files to process before deleting anything in root_dir
+    files_to_process = list(files)
+
+    # Delete everything in root_dir
+    if root_dir.exists():
+        for item in root_dir.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+    else:
+        root_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use the saved list for further processing
+    files = files_to_process
+
+    # Parse file info and group by (year, month, suffix)
+    file_info = []
+    for f in files:
+        m1 = pattern1.match(f.name)
+        m2 = pattern2.match(f.name)
+        if m1:
+            parts = f.stem.split('_')
+            date_str = parts[0]
+            suffix = m1.group(1) if m1.group(1) else None
+        elif m2:
+            parts = f.stem.split('_')
+            date_str = parts[0]
+            suffix = None
+        else:
+            continue  # Should not happen
+        # Parse date
+        if len(date_str) == 8:
+            year = int(date_str[:4])
+            month = int(date_str[4:6])
+        else:
+            year = int('20' + date_str[:2])
+            month = int(date_str[2:4])
+        file_info.append({
+            'path': f,
+            'year': year,
+            'month': month,
+            'suffix': suffix,
+            'date_str': date_str,
+            'name': f.name
+        })
+
+    # Count suffix occurrences per year
+    suffix_counts = defaultdict(lambda: defaultdict(int))  # {year: {suffix: count}}
+    for info in file_info:
+        if info['suffix']:
+            suffix_counts[info['year']][info['suffix']] += 1
+
+    # Decide which (year, suffix) pairs get their own folder (only if >10)
+    valid_suffixes = set()
+    for year, suffix_map in suffix_counts.items():
+        for suffix, count in suffix_map.items():
+            if count > 10:
+                valid_suffixes.add((year, suffix))
+
+    # Group by (year, suffix)
+    year_suffix_groups = defaultdict(list)
+    for info in file_info:
+        # Only assign to suffix group if (year, suffix) is in valid_suffixes, else treat as no suffix
+        key = (info['year'], info['suffix'] if info['suffix'] and (info['year'], info['suffix']) in valid_suffixes else '')
+        year_suffix_groups[key].append(info)
+
+    # Build a structure: {decade: {year_folder: [info,...]}}
+    decade_map = defaultdict(lambda: defaultdict(list))
+    for (year, suffix), group in year_suffix_groups.items():
+        # Determine year folder name
+        if suffix:
+            year_folder = f"{year} {suffix.capitalize()}"
+        else:
+            year_folder = f"{year}"
+        decade = f"{(year // 10) * 10}s"
+        for info in group:
+            info['year_folder'] = year_folder
+            info['has_suffix'] = bool(suffix)
+            decade_map[decade][year_folder].append(info)
+
+    # Now copy files into the structure
+    for decade, years in sorted(decade_map.items()):
+        for year_folder, infos in sorted(years.items()):
+            has_suffix = infos[0]['has_suffix']
+            if has_suffix:
+                # Place all files directly in the year_folder (no monthly subfolders)
+                target_folder = root_dir / decade / year_folder
+                target_folder.mkdir(parents=True, exist_ok=True)
+                for info in infos:
+                    dest = target_folder / info['name']
+                    if info['path'].resolve() == dest.resolve():
+                        print(f"Skipped copying {info['path'].name}: source and destination are the same file.")
+                        continue
+                    shutil.copy2(info['path'], dest)
+                    print(f"Copied {info['path'].name} -> {dest}")
+            else:
+                # For folders without suffix, group by month
+                month_map = defaultdict(list)
+                for info in infos:
+                    month_map[info['month']].append(info)
+                for month in sorted(month_map):
+                    month_name = datetime(infos[0]['year'], month, 1).strftime("%B")
+                    month_folder = f"{month}. {month_name}"
+                    target_folder = root_dir / decade / year_folder / month_folder
+                    target_folder.mkdir(parents=True, exist_ok=True)
+                    for info in month_map[month]:
+                        dest = target_folder / info['name']
+                        if info['path'].resolve() == dest.resolve():
+                            print(f"Skipped copying {info['path'].name}: source and destination are the same file.")
+                            continue
+                        shutil.copy2(info['path'], dest)
+                        print(f"Copied {info['path'].name} -> {dest}")
