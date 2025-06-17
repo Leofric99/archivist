@@ -6,6 +6,7 @@ import warnings
 import re
 import csv
 import json
+import pyexiv2
 
 
 #################### CONFIGURATION ################
@@ -363,7 +364,7 @@ def export_metadata() -> None:
 
 def rewrite_metadata_from_file() -> None:
     print("\n" + "═" * 50)
-    print("✏️  Rewrite Metadata from File  ✏️".center(50))
+    print("✏️  Rewrite Metadata from File (using pyexiv2)  ✏️".center(50))
     print("═" * 50)
     meta_path = input(" Enter path to metadata file (CSV or JSON): ").strip()
     meta_file = Path(meta_path).expanduser().resolve()
@@ -389,11 +390,13 @@ def rewrite_metadata_from_file() -> None:
         with open(meta_file, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # Try to parse EXIF Data as dict if possible
-                try:
-                    row['EXIF Data'] = eval(row['EXIF Data']) if isinstance(row['EXIF Data'], str) else row['EXIF Data']
-                except:
-                    pass
+                # Expecting EXIF Data, IPTC Data, XMP Data as dicts or JSON strings
+                for key in ['EXIF Data', 'IPTC Data', 'XMP Data']:
+                    if key in row and isinstance(row[key], str):
+                        try:
+                            row[key] = json.loads(row[key])
+                        except Exception:
+                            row[key] = {}
                 metadata_list.append(row)
 
     # Ask for folder containing images
@@ -414,30 +417,23 @@ def rewrite_metadata_from_file() -> None:
             continue
         img_path = all_files[fname]
         exif_data = meta.get('EXIF Data', {})
-        if isinstance(exif_data, str):
-            try:
-                exif_data = eval(exif_data)
-            except:
-                exif_data = {}
+        iptc_data = meta.get('IPTC Data', {})
+        xmp_data = meta.get('XMP Data', {})
+
         try:
-            img = Image.open(img_path)
-            if not hasattr(img, "info") or "exif" not in img.info:
-                print(f"Cannot update EXIF for {fname}: no EXIF segment.")
-                continue
-            exif_bytes = img.info.get("exif", b"")
-            # PIL does not support writing arbitrary EXIF tags, so only update standard ones
-            # For demonstration, update DateTimeOriginal if present
-            exif_dict = TiffImagePlugin.ImageFileDirectory_v2()
-            for k, v in exif_data.items():
-                tag_id = None
-                for tid, tname in ExifTags.TAGS.items():
-                    if tname == k:
-                        tag_id = tid
-                        break
-                if tag_id:
-                    exif_dict[tag_id] = v
-            img.save(img_path, exif=exif_dict.tobytes())
-            print(f"Updated metadata for {fname}")
+            img = pyexiv2.Image(str(img_path))
+            img.read_metadata()
+            # Overwrite EXIF
+            for tag, value in exif_data.items():
+                img[tag] = value
+            # Overwrite IPTC
+            for tag, value in iptc_data.items():
+                img[tag] = value
+            # Overwrite XMP
+            for tag, value in xmp_data.items():
+                img[tag] = value
+            img.write_metadata()
+            print(f"Updated all metadata for {fname}")
             updated += 1
         except Exception as e:
             print(f"Failed to update {fname}: {e}")

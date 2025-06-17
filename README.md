@@ -12,6 +12,25 @@ cd archivist
 pip install -r requirements.txt
 ```
 
+### System Requirements
+
+In addition to the Python dependencies, you must install some system libraries for full metadata support:
+
+#### macOS
+
+```sh
+brew install inih exiv2
+```
+
+#### Linux
+
+```sh
+sudo apt-get update
+sudo apt-get install libexiv2-dev libinih-dev
+```
+
+> If you encounter issues with `pyexiv2`, ensure both `exiv2` and `inih` libraries are installed and available on your system.
+
 ## Running the Script
 
 This script performs the main execution logic for the project.
@@ -50,4 +69,25 @@ To add a visible date and optional text onto your photos:
 - The date and text will appear in the bottom-right corner of each photo.
 
 This works for single images or entire folders, and supports processing subfolders if you choose.
+
+#### Exporting Image Metadata
+
+You can export metadata from your images to a CSV or JSON file for archival or analysis:
+
+- Choose "Export Image Metadata to a CSV or JSON File" from the menu.
+- Enter the folder path containing your images.
+- Choose whether to include subdirectories.
+- Specify the output directory and the desired export format (`csv`, `json`, or `both`).
+- The script will extract file information and EXIF metadata and save it to the specified location.
+
+#### Importing (Rewriting) Metadata
+
+You can rewrite image metadata from a previously exported CSV or JSON file:
+
+- Choose "Import Image Metadata from a CSV or JSON File" from the menu.
+- Enter the path to your metadata file (CSV or JSON).
+- Confirm the file and specify the folder containing the images to update.
+- The script will attempt to update EXIF, IPTC, and XMP metadata for matching files.
+
+> **Note:** For full metadata support, ensure all system dependencies are installed as described above.
 

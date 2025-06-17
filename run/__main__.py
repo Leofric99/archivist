@@ -35,15 +35,16 @@ def photos_menu() -> str:
     print(" 1. Rename Photographs to Standard Format")
     print(" 2. Burn-in Information to Photographs")
     print(" 3. Export Image Metadata to a CSV or JSON File")
-    print(" 4. Back to Main Menu")
-    print(" 5. Exit the Archivist Utility")
+    print(" 4. Import Image Metadata from a CSV or JSON File")
+    print(" 5. Back to Main Menu")
+    print(" 6. Exit the Archivist Utility")
     print("═" * 50)
 
     while True:
-        choice = input(" Select an option (1-5): ").strip()
-        if choice in ('1', '2', '3', '4', '5'):
+        choice = input(" Select an option (1-6): ").strip()
+        if choice in ('1', '2', '3', '4', '5', '6'):
             return choice
-        print("❌  Invalid selection. Please choose 1, 2, 3, 4, or 5.")
+        print("❌  Invalid selection. Please choose 1, 2, 3, 4, 5, or 6.")
 
 
 ################ Main Function #############
