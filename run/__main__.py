@@ -1,36 +1,76 @@
 from . import photos
 
 
-def main_menu() -> str:
+############# Supporting Functions #############
+
+def handle_rename_photos():
     while True:
-        print("\nArchivist Utility Menu:\n")
-        print("1. Rename Photographs to Standard Format")
-        print("2. Burn-in Information to Photographs")
-        print("3. Exit (More to follow...)")
-        choice = input("\nSelect an option (1-3): ").strip()
-        return choice
+        film_or_digital = input("Is this for Film or Digital photographs? (f/d): ").strip().lower()
+        if film_or_digital in ('f', 'd'):
+            break
+        print("Invalid selection. Please choose 'f' for Film or 'd' for Digital.")
+    if film_or_digital == 'f':
+        photos.rename_film()
+    else:
+        photos.rename_digital()
+
+
+################ Menu Functions #############
+
+
+def main_menu() -> str:
+    print("\n" + "═" * 50)
+    print("📦  Welcome to the Archivist Utility!  📦".center(50))
+    print("═" * 50)
+    print(" 1. Photographs")
+    print(" 2. Exit (More options coming soon!)")
+    print("═" * 50)
+    return input(" Select an option (1 - 2): ").strip()
+
+
+def photos_menu() -> str:
+    print("\n" + "═" * 50)
+    print("🖼️  Photograph Type Menu  🖼️".center(50))
+    print("═" * 50)
+    print(" 1. Rename Photographs to Standard Format")
+    print(" 2. Burn-in Information to Photographs")
+    print(" 3. Export Image Metadata to a CSV or JSON File")
+    print(" 4. Back to Main Menu")
+    print(" 5. Exit the Archivist Utility")
+    print("═" * 50)
+
+    while True:
+        choice = input(" Select an option (1-5): ").strip()
+        if choice in ('1', '2', '3', '4', '5'):
+            return choice
+        print("❌  Invalid selection. Please choose 1, 2, 3, 4, or 5.")
+
+
+################ Main Function #############
 
 
 def main() -> None:
-    main_choice = main_menu()
-    if main_choice == '1':
-        while True:
-            film_or_digital = input("Is this for Film or Digital photographs? (f/d): ").strip().lower()
-            if film_or_digital not in ('f', 'd'):
-                print("Invalid selection. Please choose 'f' for Film or 'd' for Digital.")
-                continue
+    while True:
+        choice = main_menu()
+        if choice == '2':
+            print("👋  Exiting the Archivist Utility. Goodbye!")
             break
-        if film_or_digital == 'f':
-            photos.rename_film()
-        elif film_or_digital == 'd':
-            photos.rename_digital()
-    elif main_choice == '2':
-        photos.burn_in_metadata()
-    elif main_choice == '3':
-        print("Exiting. More features coming soon...")
-        return
-    else:
-        print("Invalid selection. Please choose 1, 2, or 3.")
+        elif choice == '1':
+            while True:
+                photos_choice = photos_menu()
+                if photos_choice == '1':
+                    handle_rename_photos()
+                elif photos_choice == '2':
+                    photos.burn_in_metadata()
+                elif photos_choice == '3':
+                    photos.export_metadata()
+                elif photos_choice == '4':
+                    break
+                elif photos_choice == '5':
+                    print("👋  Exiting the Archivist Utility. Goodbye!")
+                    return
+        else:
+            print("❌  Invalid selection. Please choose 1 or 2.")
 
 
 if __name__ == '__main__':

@@ -1,15 +1,17 @@
 import platform
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags, TiffImagePlugin
 from datetime import datetime
 import warnings
 import re
+import csv
+import json
 
 
 #################### CONFIGURATION ################
 
 
-Image.MAX_IMAGE_PIXELS = None
+Image.MAX_IMAGE_PIXELS = None # Disable the limit on image size to prevent DecompressionBombError
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
 IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.tiff', '.heic', '.bmp']
@@ -49,18 +51,49 @@ def format_custom_date(date_str) -> str:
     return date_str
 
 
+def export_json(path, data):
+
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"Metadata exported to {path} (JSON)")
+
+
+def export_csv(path, data, fieldnames=None):
+    
+    if not fieldnames:
+        # Use keys from the first item if not provided
+        if data:
+            fieldnames = list(data[0].keys())
+        else:
+            fieldnames = []
+
+    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for meta in data:
+            row = meta.copy()
+            # Convert dict fields to string for CSV compatibility
+            for k, v in row.items():
+                if isinstance(v, dict):
+                    row[k] = str(v)
+            writer.writerow(row)
+    print(f"Metadata exported to {path} (CSV)")
+
+
 #################### MAIN OPERATIONAL FUNCTIONS ###################
 
 
+# Burn-in metadata to photographs with optional custom text and date for longjevity
 def burn_in_metadata() -> None:
-
-    # Get user input for image processing
-    image_path = input("Enter path to the image or folder: ").strip()
-    output_path = input("Enter output path (leave blank to overwrite original): ").strip()
-    per_photo_suffix = input("Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
-    custom_text = None if per_photo_suffix else input("Enter custom text to burn in to all photos: ").strip()
-    use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
-    custom_date = input("Enter date (YYYYMMDD): ").strip() if use_custom_date else None
+    print("\n" + "═" * 50)
+    print("🔥  Burn-in Metadata to Photographs  🔥".center(50))
+    print("═" * 50)
+    image_path = input(" Enter path to the image or folder: ").strip()
+    output_path = input(" Enter output path (leave blank to overwrite original): ").strip()
+    per_photo_suffix = input(" Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
+    custom_text = None if per_photo_suffix else input(" Enter custom text to burn in to all photos: ").strip()
+    use_custom_date = input(" Use custom date? (y/n): ").strip().lower() == 'y'
+    custom_date = input(" Enter date (YYYYMMDD): ").strip() if use_custom_date else None
 
     # Convert Windows paths to WSL format if running on Linux
     if platform.system() == 'Linux' and ':' in image_path and '\\' in image_path:
@@ -69,7 +102,10 @@ def burn_in_metadata() -> None:
         output_path = convert_windows_path_to_wsl(output_path)
 
     # Validate paths
-    include_subdirs = Path(image_path).is_dir() and input("Include subdirectories? (y/n): ").strip().lower() == 'y'
+    if Path(image_path).is_dir():
+        include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
+    else:
+        include_subdirs = False
 
     # Main image processing logic
     def process_image(in_path, out_path, custom_text=None) -> None:
@@ -141,15 +177,20 @@ def burn_in_metadata() -> None:
         else: process_image(path, out_file, custom_text)
 
 
+# Rename digital or film photographs based on EXIF data or custom date
 def rename_digital() -> None:
-    folder_path = input("Enter folder path: ").strip()
-    include_subdirs = input("Include subdirectories? (y/n): ").strip().lower() == 'y'
-    include_raw = input("Include RAW files? (y/n): ").strip().lower() == 'y'
-    custom_suffix = input("Custom suffix (leave blank for none): ").strip()
-    use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
-    custom_date = input("Enter date (YYYYMMDD): ").strip() if use_custom_date else None
-    include_video = input("Include videos? (y/n): ").strip().lower() == 'y'
+    print("\n" + "═" * 50)
+    print("🖼️  Rename Digital Photographs  🖼️".center(50))
+    print("═" * 50)
+    folder_path = input(" Enter folder path: ").strip()
+    include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
+    include_raw = input(" Include RAW files? (y/n): ").strip().lower() == 'y'
+    custom_suffix = input(" Custom suffix (leave blank for none): ").strip()
+    use_custom_date = input(" Use custom date? (y/n): ").strip().lower() == 'y'
+    custom_date = input(" Enter date (YYYYMMDD): ").strip() if use_custom_date else None
+    include_video = input(" Include videos? (y/n): ").strip().lower() == 'y'
 
+    # Convert Windows paths to WSL format if running on Linux
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
     folder = Path(folder).resolve()
     if not folder.is_dir(): raise ValueError(f"Not a directory: {folder}")
@@ -222,15 +263,19 @@ def rename_digital() -> None:
             print(f"Failed to rename {old.name}: {e}")
 
 
+# Rename digital or film photographs based on EXIF data or custom date
 def rename_film() -> None:
-    folder_path = input("Enter folder path: ").strip()
-    include_subdirs = input("Include subdirectories? (y/n): ").strip().lower() == 'y'
-    include_raw = input("Include RAW files? (y/n): ").strip().lower() == 'y'
-    custom_suffix = input("Custom suffix (leave blank for none): ").strip()
+    print("\n" + "═" * 50)
+    print("🎞️  Rename Film Photographs  🎞️".center(50))
+    print("═" * 50)
+    folder_path = input(" Enter folder path: ").strip()
+    include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
+    include_raw = input(" Include RAW files? (y/n): ").strip().lower() == 'y'
+    custom_suffix = input(" Custom suffix (leave blank for none): ").strip()
     while True:
-        custom_date = input("Enter date for all files (YYYYMMDD, YYYYMM, or YYYY): ").strip()
+        custom_date = input(" 📆  Enter date for all files (YYYYMMDD, YYYYMM, or YYYY): ").strip()
         if custom_date and len(custom_date) in [4, 6, 8] and custom_date.isdigit(): break
-        print("Invalid date format. Please enter date as YYYY or YYYYMM or YYYYMMDD.")
+        print("❌  Invalid date format. Please enter date as YYYY or YYYYMM or YYYYMMDD.")
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
     folder = Path(folder).resolve()
@@ -256,3 +301,145 @@ def rename_film() -> None:
         new_path = file_path.with_name(new_name)
         try: file_path.rename(new_path); print(f"Renamed {file_path.name} -> {new_name}")
         except Exception as e: print(f"Failed to rename {file_path.name}: {e}")
+
+
+# Export metadata from images in a folder to CSV or JSON for longjevity
+def export_metadata() -> None:
+    print("\n" + "═" * 50)
+    print("📤  Export Image Metadata  📤".center(50))
+    print("═" * 50)
+    folder_path = input(" Enter folder path: ").strip()
+    include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
+    output_dir = input(" Enter output directory: ").strip()
+    output_formats = input(" Export format? (csv/json/both): ").strip().lower()
+
+    folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
+    folder = Path(folder).resolve()
+    if not folder.is_dir():
+        raise ValueError(f"Not a directory: {folder}")
+
+    output_dir = convert_windows_path_to_wsl(output_dir) if (platform.system() == 'Linux' and ':' in output_dir and '\\' in output_dir) else output_dir
+    output_dir = Path(output_dir).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    files = folder.rglob('*') if include_subdirs else folder.iterdir()
+    metadata_list = []
+
+    for file_path in files:
+        if (
+            not file_path.is_file()
+            or file_path.suffix.lower() not in IMAGE_EXTENSIONS
+        ):
+            continue
+        try:
+            img = Image.open(file_path)
+            raw = img._getexif() if hasattr(img, '_getexif') else None
+            exif_data = {ExifTags.TAGS.get(k, k): v for k, v in raw.items()} if raw else {}
+            # Convert all EXIF values to strings for JSON serialization
+            exif_data_str = {k: str(v) for k, v in exif_data.items()}
+            date_created = datetime.fromtimestamp(file_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M:%S')
+            date_modified = datetime.fromtimestamp(file_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            metadata = {
+                'File Name': file_path.name,
+                'File Size': file_path.stat().st_size,
+                'Date Created': date_created,
+                'Date Modified': date_modified,
+                'EXIF Data': exif_data_str
+            }
+            metadata_list.append(metadata)
+        except Exception as e:
+            print(f"Error processing {file_path.name}: {e}")
+
+    if output_formats == 'json':
+        export_json(output_dir / "metadata.json", metadata_list)
+    elif output_formats == 'csv':
+        export_csv(output_dir / "metadata.csv", metadata_list)
+    elif output_formats == 'both':
+        export_json(output_dir / "metadata.json", metadata_list)
+        export_csv(output_dir / "metadata.csv", metadata_list)
+    else:
+        print("Unknown format. Please choose 'csv', 'json', or 'both'.")
+
+
+def rewrite_metadata_from_file() -> None:
+    print("\n" + "═" * 50)
+    print("✏️  Rewrite Metadata from File  ✏️".center(50))
+    print("═" * 50)
+    meta_path = input(" Enter path to metadata file (CSV or JSON): ").strip()
+    meta_file = Path(meta_path).expanduser().resolve()
+    if not meta_file.exists():
+        print(f"❌  File not found: {meta_file}")
+        return
+    if meta_file.suffix.lower() not in ['.csv', '.json']:
+        print("❌  File must be a .csv or .json")
+        return
+
+    print(f"✅  Found metadata file: {meta_file}")
+    confirm = input("Is this the correct file? (y/n): ").strip().lower()
+    if confirm != 'y':
+        print("Aborted.")
+        return
+
+    # Load metadata
+    metadata_list = []
+    if meta_file.suffix.lower() == '.json':
+        with open(meta_file, 'r', encoding='utf-8') as f:
+            metadata_list = json.load(f)
+    else:
+        with open(meta_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Try to parse EXIF Data as dict if possible
+                try:
+                    row['EXIF Data'] = eval(row['EXIF Data']) if isinstance(row['EXIF Data'], str) else row['EXIF Data']
+                except:
+                    pass
+                metadata_list.append(row)
+
+    # Ask for folder containing images
+    img_folder = input(" 📁  Enter folder containing images to update: ").strip()
+    img_folder = Path(img_folder).expanduser().resolve()
+    if not img_folder.is_dir():
+        print(f"❌  Not a directory: {img_folder}")
+        return
+
+    # Build lookup for images in folder
+    all_files = {f.name: f for f in img_folder.glob('*') if f.is_file()}
+
+    updated = 0
+    for meta in metadata_list:
+        fname = meta.get('File Name')
+        if not fname or fname not in all_files:
+            print(f"Skipping {fname}: not found in folder.")
+            continue
+        img_path = all_files[fname]
+        exif_data = meta.get('EXIF Data', {})
+        if isinstance(exif_data, str):
+            try:
+                exif_data = eval(exif_data)
+            except:
+                exif_data = {}
+        try:
+            img = Image.open(img_path)
+            if not hasattr(img, "info") or "exif" not in img.info:
+                print(f"Cannot update EXIF for {fname}: no EXIF segment.")
+                continue
+            exif_bytes = img.info.get("exif", b"")
+            # PIL does not support writing arbitrary EXIF tags, so only update standard ones
+            # For demonstration, update DateTimeOriginal if present
+            exif_dict = TiffImagePlugin.ImageFileDirectory_v2()
+            for k, v in exif_data.items():
+                tag_id = None
+                for tid, tname in ExifTags.TAGS.items():
+                    if tname == k:
+                        tag_id = tid
+                        break
+                if tag_id:
+                    exif_dict[tag_id] = v
+            img.save(img_path, exif=exif_dict.tobytes())
+            print(f"Updated metadata for {fname}")
+            updated += 1
+        except Exception as e:
+            print(f"Failed to update {fname}: {e}")
+
+    print(f"Done. Updated {updated} files.")
