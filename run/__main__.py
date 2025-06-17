@@ -1,6 +1,7 @@
 from . import photos
 
-def main_menu():
+
+def main_menu() -> str:
     while True:
         print("\nArchivist Utility Menu:\n")
         print("1. Rename Photographs to Standard Format")
@@ -9,7 +10,8 @@ def main_menu():
         choice = input("\nSelect an option (1-3): ").strip()
         return choice
 
-def main():
+
+def main() -> None:
     main_choice = main_menu()
     if main_choice == '1':
         while True:
@@ -29,6 +31,7 @@ def main():
         return
     else:
         print("Invalid selection. Please choose 1, 2, or 3.")
+
 
 if __name__ == '__main__':
     main()

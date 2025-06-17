@@ -1,4 +1,3 @@
-import os
 import platform
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags
@@ -6,7 +5,10 @@ from datetime import datetime
 import warnings
 import re
 
-# Disable PIL's decompression bomb protection (remove pixel limit)
+
+#################### CONFIGURATION ################
+
+
 Image.MAX_IMAGE_PIXELS = None
 warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
@@ -15,17 +17,10 @@ RAW_EXTENSIONS = ['.cr2', '.nef', '.arw', '.rw2', '.dng', '.tif']
 VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.mts', '.m2ts', '.3gp', '.webm']
 
 
-def burn_in_metadata():
-    # --- User Input ---
-    image_path = input("Enter path to the image or folder: ").strip()
-    output_path = input("Enter output path (leave blank to overwrite original): ").strip()
-    per_photo_suffix = input("Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
-    custom_text = None if per_photo_suffix else input("Enter custom text to burn in to all photos: ").strip()
-    use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
-    custom_date = input("Enter date (YYYYMMDD): ").strip() if use_custom_date else None
+################### SUPPORTING FUNCTIONS ###################
 
-    # --- Path Conversion for WSL ---
-    def convert_windows_path_to_wsl(path_str):
+
+def convert_windows_path_to_wsl(path_str) -> str:
         m = re.match(r'^([A-Za-z]):\\', path_str)
         if m:
             drive = m.group(1).lower()
@@ -33,29 +28,51 @@ def burn_in_metadata():
             return f"/mnt/{drive}/{replaced}"
         return path_str
 
+
+def format_datetime(dt) -> str:
+    if not dt:
+        return ""
+    # Use ordinal for day (e.g., 1st, 2nd, 3rd, 4th, etc.)
+    ordinal = lambda n: f"{n}{'th' if 10 <= n % 100 <= 20 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
+    return f"{ordinal(dt.day)} {dt.strftime('%B')} {dt.year}"
+
+
+def format_custom_date(date_str) -> str:
+    if not date_str: return ""
+    if re.fullmatch(r"\d{8}", date_str):
+        try: dt = datetime.strptime(date_str, "%Y%m%d"); return format_datetime(dt)
+        except: return date_str
+    if re.fullmatch(r"\d{6}", date_str):
+        try: dt = datetime.strptime(date_str, "%Y%m"); return f"{dt.strftime('%B')} {dt.year}"
+        except: return date_str
+    if re.fullmatch(r"\d{4}", date_str): return date_str
+    return date_str
+
+
+#################### MAIN OPERATIONAL FUNCTIONS ###################
+
+
+def burn_in_metadata() -> None:
+
+    # Get user input for image processing
+    image_path = input("Enter path to the image or folder: ").strip()
+    output_path = input("Enter output path (leave blank to overwrite original): ").strip()
+    per_photo_suffix = input("Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
+    custom_text = None if per_photo_suffix else input("Enter custom text to burn in to all photos: ").strip()
+    use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
+    custom_date = input("Enter date (YYYYMMDD): ").strip() if use_custom_date else None
+
+    # Convert Windows paths to WSL format if running on Linux
     if platform.system() == 'Linux' and ':' in image_path and '\\' in image_path:
         image_path = convert_windows_path_to_wsl(image_path)
     if output_path and platform.system() == 'Linux' and ':' in output_path and '\\' in output_path:
         output_path = convert_windows_path_to_wsl(output_path)
 
+    # Validate paths
     include_subdirs = Path(image_path).is_dir() and input("Include subdirectories? (y/n): ").strip().lower() == 'y'
 
-    # --- Inline helpers ---
-    ordinal = lambda n: f"{n}{'th' if 10 <= n % 100 <= 20 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
-    def format_custom_date(date_str):
-        if not date_str: return ""
-        if re.fullmatch(r"\d{8}", date_str):
-            try: dt = datetime.strptime(date_str, "%Y%m%d"); return f"{ordinal(dt.day)} {dt.strftime('%B')} {dt.year}"
-            except: return date_str
-        if re.fullmatch(r"\d{6}", date_str):
-            try: dt = datetime.strptime(date_str, "%Y%m"); return f"{dt.strftime('%B')} {dt.year}"
-            except: return date_str
-        if re.fullmatch(r"\d{4}", date_str): return date_str
-        return date_str
-    def format_datetime(dt): return f"{ordinal(dt.day)} {dt.strftime('%B')} {dt.year}" if dt else ""
-
-    # --- Main image processing logic ---
-    def process_image(in_path, out_path, custom_text=None):
+    # Main image processing logic
+    def process_image(in_path, out_path, custom_text=None) -> None:
         try: img = Image.open(in_path); img = ImageOps.exif_transpose(img).convert("RGBA")
         except Exception as e: print(f"Error opening image {in_path}: {e}"); return
         try: raw = img._getexif(); exif = {ExifTags.TAGS.get(k, k): v for k, v in raw.items()} if raw else {}
@@ -124,7 +141,7 @@ def burn_in_metadata():
         else: process_image(path, out_file, custom_text)
 
 
-def rename_digital():
+def rename_digital() -> None:
     folder_path = input("Enter folder path: ").strip()
     include_subdirs = input("Include subdirectories? (y/n): ").strip().lower() == 'y'
     include_raw = input("Include RAW files? (y/n): ").strip().lower() == 'y'
@@ -132,14 +149,6 @@ def rename_digital():
     use_custom_date = input("Use custom date? (y/n): ").strip().lower() == 'y'
     custom_date = input("Enter date (YYYYMMDD): ").strip() if use_custom_date else None
     include_video = input("Include videos? (y/n): ").strip().lower() == 'y'
-
-    def convert_windows_path_to_wsl(path_str):
-        m = re.match(r'^([A-Za-z]):\\', path_str)
-        if m:
-            drive = m.group(1).lower()
-            replaced = path_str[3:].replace('\\', '/')
-            return f"/mnt/{drive}/{replaced}"
-        return path_str
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
     folder = Path(folder).resolve()
@@ -212,7 +221,8 @@ def rename_digital():
         except Exception as e:
             print(f"Failed to rename {old.name}: {e}")
 
-def rename_film():
+
+def rename_film() -> None:
     folder_path = input("Enter folder path: ").strip()
     include_subdirs = input("Include subdirectories? (y/n): ").strip().lower() == 'y'
     include_raw = input("Include RAW files? (y/n): ").strip().lower() == 'y'
@@ -221,14 +231,6 @@ def rename_film():
         custom_date = input("Enter date for all files (YYYYMMDD, YYYYMM, or YYYY): ").strip()
         if custom_date and len(custom_date) in [4, 6, 8] and custom_date.isdigit(): break
         print("Invalid date format. Please enter date as YYYY or YYYYMM or YYYYMMDD.")
-
-    def convert_windows_path_to_wsl(path_str):
-        m = re.match(r'^([A-Za-z]):\\', path_str)
-        if m:
-            drive = m.group(1).lower()
-            replaced = path_str[3:].replace('\\', '/')
-            return f"/mnt/{drive}/{replaced}"
-        return path_str
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
     folder = Path(folder).resolve()
