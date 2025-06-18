@@ -194,3 +194,69 @@ def burn_in_metadata_video() -> None:
             process_video(path, out_file, custom_text if custom_text else None)
         else:
             process_video(path, out_file, custom_text)
+
+
+def rename_videos() -> None:
+    print("\n" + "═" * 50)
+    print("🎬  Rename Videos  🎬".center(50))
+    print("═" * 50)
+    folder_path = input(" Enter folder path: ").strip()
+    include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
+    custom_suffix = input(" Custom suffix (leave blank for none): ").strip()
+    use_custom_date = input(" Use custom date? (y/n): ").strip().lower() == 'y'
+    custom_date = input(" Enter date (YYYYMMDD): ").strip() if use_custom_date else None
+
+    # Convert Windows paths to WSL format if running on Linux
+    folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
+    folder = Path(folder).resolve()
+    if not folder.is_dir():
+        raise ValueError(f"Not a directory: {folder}")
+    files = folder.rglob('*') if include_subdirs else folder.iterdir()
+    valid_exts = [ext.lower() for ext in VIDEO_EXTENSIONS]
+    custom_suffix = '_'.join(custom_suffix.split()).lower() if custom_suffix else ""
+    base_name_to_files = {}
+    for file_path in files:
+        if not file_path.is_file() or file_path.suffix.lower() not in valid_exts:
+            continue
+        # --- Get video creation or fallback date ---
+        dt = get_video_creation_date(file_path)
+        if custom_date:
+            try:
+                custom_date_obj = datetime.strptime(custom_date, "%Y%m%d")
+            except:
+                custom_date_obj = None
+            time_part = dt.strftime('%H%M%S') if dt else "000000"
+            base = f"{custom_date_obj.strftime('%Y%m%d') if custom_date_obj else custom_date}_{time_part}"
+        elif dt:
+            base = dt.strftime('%Y%m%d_%H%M%S')
+        else:
+            base = "00000000_000000"
+        if custom_suffix:
+            base += f"_{custom_suffix}"
+        base_name_to_files.setdefault(base, []).append(file_path)
+
+    # Preview changes
+    preview = []
+    for base, files_list in base_name_to_files.items():
+        files_list = sorted(files_list)
+        for idx, file_path in enumerate(files_list, start=1):
+            suffix = file_path.suffix.lower()
+            new_name = f"{base}{f'_{idx}' if len(files_list) > 1 else ''}{suffix}"
+            new_path = file_path.with_name(new_name)
+            preview.append((file_path, new_path))
+
+    print("\nPlanned renames:")
+    for old, new in preview:
+        print(f"{old.name} -> {new.name}")
+
+    confirm = input("\nProceed with renaming? (y/n): ").strip().lower()
+    if confirm != 'y':
+        print("Aborted.")
+        return
+
+    for old, new in preview:
+        try:
+            old.rename(new)
+            print(f"Renamed {old.name} -> {new.name}")
+        except Exception as e:
+            print(f"Failed to rename {old.name}: {e}")

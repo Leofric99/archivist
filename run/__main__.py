@@ -54,16 +54,17 @@ def videos_menu() -> str:
     print("\n" + "═" * 50)
     print("🎥  Video Menu  🎥".center(50))
     print("═" * 50)
-    print(" 1. Burn-in Metadata to Videos")
-    print(" 2. Back to Main Menu")
-    print(" 3. Exit the Archivist Utility")
+    print(" 1. Rename Videos to Standard Format")
+    print(" 2. Burn-in Metadata to Videos")
+    print(" 3. Back to Main Menu")
+    print(" 4. Exit the Archivist Utility")
     print("═" * 50)
     
     while True:
-        choice = input(" Select an option (1-3): ").strip()
-        if choice in ('1', '2', '3'):
+        choice = input(" Select an option (1-4): ").strip()
+        if choice in ('1', '2', '3', '4'):
             return choice
-        print("❌  Invalid selection. Please choose 1, 2, or 3.")
+        print("❌  Invalid selection. Please choose 1, 2, 3, or 4.")
 
 
 ################ Main Function ################
@@ -98,11 +99,13 @@ def main() -> None:
             while True:
                 videos_choice = videos_menu()
                 if videos_choice == '1':
-                    videos.burn_in_metadata_video()
+                    videos.rename_videos()
                 elif videos_choice == '2':
+                    videos.burn_in_metadata_video()
+                elif videos_choice == '3':
                     print("Returning to the Main Menu...")
                     break
-                elif videos_choice == '3':
+                elif videos_choice == '4':
                     print("👋  Exiting the Archivist Utility. Goodbye!")
                     exit()
         else:
