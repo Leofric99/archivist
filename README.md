@@ -14,26 +14,28 @@ pip install -r requirements.txt
 
 ### System Requirements
 
-In addition to the Python dependencies, you must install some system libraries for full metadata support:
+In addition to the Python dependencies, you must install some system libraries for full metadata and video support:
 
 #### macOS
 
 ```sh
-brew install inih exiv2
+brew install inih exiv2 ffmpeg
 ```
 
 #### Linux
 
 ```sh
 sudo apt-get update
-sudo apt-get install libexiv2-dev libinih-dev
+sudo apt-get install libexiv2-dev libinih-dev ffmpeg
 ```
 
 #### Windows
 
 While running on Windows should be possible, I recommend using WSL.
 
-> If you encounter issues with `pyexiv2`, ensure both `exiv2` and `inih` libraries are installed and available on your system.
+> If you encounter issues with importing photo metadata, ensure both `exiv2` and `inih` libraries are installed and available on your system.
+>  
+> For video features, you must also have `ffmpeg` installed and accessible from your system path.
 
 ## Running the Script
 
@@ -49,63 +51,26 @@ Make sure you have all required dependencies installed before running the script
 
 ### Photographs
 
-#### Renaming
+- **Renaming:**  
+  Standardizes photo filenames using the date from metadata or user input. Formats as `YYYYMMDD_HHMMSS[_suffix][_{n}].ext`. Supports digital and film scans, subfolders, RAW files, and custom suffixes.
 
-You can rename your photo files for better organisation, using either the date from the photo's metadata (for digital photos) or a date you provide (for scanned film photos):
+- **Burning In Metadata:**  
+  Adds a visible date and optional text to the bottom-right corner of photos. Works for single images or folders.
 
-- **Digital photos:**  
-  Choose "Rename Photographs to Standard Format" from the menu, select "Digital", and follow the prompts. The script will automatically extract the date from EXIF metadata, filenames, or file timestamps.
+- **Exporting Metadata:**  
+  Exports image metadata (EXIF, etc.) to CSV or JSON for archival or analysis.
 
-- **Film scans:**  
-  Choose "Rename Photographs to Standard Format", select "Film", and enter the date when prompted (since film scans usually lack metadata). The script will use this date for renaming.
+- **Importing Metadata:**  
+  Rewrites image metadata from a previously exported CSV or JSON file.
 
-Both options let you include subfolders, RAW files, and add a custom suffix to filenames. Duplicate filenames are avoided by adding counters.
+- **Restructuring Folders:**  
+  Organizes photos and videos into a hierarchy by decade, year, and event (based on filename: `YYYYMMDD_HHMMSS_suffix.ext`). Copies files into a new structure.
 
-> **Note:** Supported file extensions and EXIF tag mappings are managed in `run/config.py`.
+### Videos
 
-#### Burning In Metadata
+- **Renaming:**  
+  Standardizes video filenames using detected or custom date. Format: `YYYYMMDD_HHMMSS[_suffix][_{n}].ext`.
 
-To add a visible date and optional text onto your photos:
-
-- Choose "Burn-in Information to Photographs" from the menu.
-- Enter the image or folder path, output location (or leave blank to overwrite), and any custom text.
-- You can use the detected date or provide your own.
-- The date and text will appear in the bottom-right corner of each photo.
-
-This works for single images or entire folders, and supports processing subfolders if you choose.
-
-#### Exporting Image Metadata
-
-You can export metadata from your images to a CSV or JSON file for archival or analysis:
-
-- Choose "Export Image Metadata to a CSV or JSON File" from the menu.
-- Enter the folder path containing your images.
-- Choose whether to include subdirectories.
-- Specify the output directory and the desired export format (`csv`, `json`, or `both`).
-- The script will extract file information and EXIF metadata and save it to the specified location.
-
-#### Importing (Rewriting) Metadata
-
-You can rewrite image metadata from a previously exported CSV or JSON file:
-
-- Choose "Import Image Metadata from a CSV or JSON File" from the menu.
-- Enter the path to your metadata file (CSV or JSON).
-- Confirm the file and specify the folder containing the images to update.
-- The script will attempt to update EXIF, IPTC, and XMP metadata for matching files.
-
-> **Note:** For full metadata support, ensure all system dependencies are installed as described above.  
-> The mapping of EXIF tags to their internal names is handled in `run/config.py` and does not require alteration.
-
-#### Restructuring Folders
-
-You can reorganise your photo and video files into a structured hierarchy based on filenames and dates:
-
-- Choose "Restructure Folder Structure" from the menu.
-- Enter the source directory.
-- The script checks that files use the standard naming scheme (e.g., `YYYYMMDD_HHMMSS_suffix.ext`).
-- If valid, you'll be prompted for a target root directory (which will be cleared before use).
-- Files are grouped by decade, year, and—if enough files share a suffix—by event folders. The minimum number of files for an event folder is customisable in `run/config.py` (`EVENT_FOLDER_THRESHOLD`, default: 10). Files without a suffix are organised by month.
-- All files are copied (not moved) into the new structure.
-
-> **Warning:** The target root directory will be deleted before restructuring. Back up any important data first.
+- **Burning In Metadata:**  
+  Adds a visible date and optional text overlay to videos (bottom-right corner). Requires `ffmpeg` to be installed and available in your system path.
 
