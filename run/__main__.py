@@ -55,7 +55,7 @@ def videos_menu() -> str:
     print("🎥  Video Menu  🎥".center(50))
     print("═" * 50)
     print(" 1. Rename Videos to Standard Format")
-    print(" 2. Burn-in Metadata to Videos")
+    print(" 2. Burn-in Metadata to Videos (advise running in tmux session)")
     print(" 3. Back to Main Menu")
     print(" 4. Exit the Archivist Utility")
     print("═" * 50)

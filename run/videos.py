@@ -125,6 +125,26 @@ def burn_in_metadata_video() -> None:
             return date_str
         return date_str
 
+    def detect_gpu_codec() -> tuple:
+        # Returns (video_codec, hwaccel_args) or (None, [])
+        # Try NVIDIA (h264_nvenc), then Intel (h264_qsv), then AMD (h264_amf)
+        # Returns codec and any extra args needed
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-encoders"],
+                capture_output=True, text=True, check=True
+            )
+            encoders = result.stdout
+            if "h264_nvenc" in encoders:
+                return ("h264_nvenc", [])
+            elif "h264_qsv" in encoders:
+                return ("h264_qsv", [])
+            elif "h264_amf" in encoders:
+                return ("h264_amf", [])
+        except Exception:
+            pass
+        return (None, [])
+
     def process_video(in_path, out_path, custom_text=None) -> None:
         dt_obj = get_video_creation_date(in_path)
         if custom_date:
@@ -146,9 +166,19 @@ def burn_in_metadata_video() -> None:
 
         out_file = Path(out_path).with_name(re.sub(r'[ \(\)]', '_', Path(out_path).name))
         out_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Detect GPU codec
+        video_codec, hwaccel_args = detect_gpu_codec()
+        if video_codec:
+            print(f"Using GPU acceleration: {video_codec}")
+            codec_args = ["-c:v", video_codec]
+        else:
+            codec_args = ["-c:v", "libx264"]
+
         cmd = [
             "ffmpeg", "-y", "-i", str(in_path),
             "-vf", drawtext,
+            *codec_args,
             "-codec:a", "copy",
             str(out_file)
         ]
