@@ -35,19 +35,20 @@ def photos_menu() -> str:
     print("🖼️  Photograph Menu  🖼️".center(50))
     print("═" * 50)
     print(" 1. Rename Photographs to Standard Format")
-    print(" 2. Burn-in Information to Photographs")
-    print(" 3. Export Image Metadata to a CSV or JSON File")
-    print(" 4. Import Image Metadata from a CSV or JSON File")
-    print(" 5. Restructure Folder Structure")
-    print(" 6. Back to Main Menu")
-    print(" 7. Exit the Archivist Utility")
+    print(" 2. Burn-in (basic) Information to Photographs")
+    print(" 3. Burn-in (verbose) Information to Photographs")
+    print(" 4. Export Image Metadata to a CSV or JSON File")
+    print(" 5. Import Image Metadata from a CSV or JSON File")
+    print(" 6. Restructure Folder Structure")
+    print(" 7. Back to Main Menu")
+    print(" 8. Exit the Archivist Utility")
     print("═" * 50)
 
     while True:
-        choice = input(" Select an option (1-7): ").strip()
-        if choice in ('1', '2', '3', '4', '5', '6', '7'):
+        choice = input(" Select an option (1-8): ").strip()
+        if choice in ('1', '2', '3', '4', '5', '6', '7', '8'):
             return choice
-        print("❌  Invalid selection. Please choose 1, 2, 3, 4, 5, 6, or 7.")
+        print("❌  Invalid selection. Please choose 1, 2, 3, 4, 5, 6, 7, or 8.")
 
 
 def videos_menu() -> str:
@@ -82,17 +83,19 @@ def main() -> None:
                 if photos_choice == '1':
                     handle_rename_photos()
                 elif photos_choice == '2':
-                    photos.burn_in_metadata()
+                    photos.burn_in_metadata_basic()
                 elif photos_choice == '3':
-                    photos.export_metadata()
+                    photos.burn_in_metadata_verbose()
                 elif photos_choice == '4':
-                    photos.import_metadata()
+                    photos.export_metadata()
                 elif photos_choice == '5':
-                    photos.restructure_folders()
+                    photos.import_metadata()
                 elif photos_choice == '6':
+                    photos.restructure_folders()
+                elif photos_choice == '7':
                     print("Returning to the Main Menu...")
                     break
-                elif photos_choice == '7':
+                elif photos_choice == '8':
                     print("👋  Exiting the Archivist Utility. Goodbye!")
                     exit()
         elif choice == '2':

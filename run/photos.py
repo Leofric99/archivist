@@ -1,9 +1,12 @@
 from .config import IMAGE_EXTENSIONS, RAW_EXTENSIONS, VIDEO_EXTENSIONS, EXIF_TAG_MAP, EVENT_FOLDER_THRESHOLD
 import platform
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags, TiffImagePlugin
+import tkinter as tk
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags, TiffImagePlugin, ImageTk
 from datetime import datetime
+import threading
 import warnings
+from queue import Queue
 import re
 import csv
 import json
@@ -19,6 +22,10 @@ warnings.simplefilter('ignore', Image.DecompressionBombWarning)
 
 
 ################### SUPPORTING FUNCTIONS ###################
+
+
+def is_windows_path_on_linux(path: str) -> bool:
+    return platform.system() == 'Linux' and ':' in path and '\\' in path
 
 
 def convert_windows_path_to_wsl(path_str) -> str:
@@ -79,13 +86,118 @@ def export_csv(path, data, fieldnames=None):
     print(f"Metadata exported to {path} (CSV)")
 
 
+def process_image(in_path, out_path, custom_text) -> None:
+    try:
+        # Open the image and ensure proper orientation
+        img = Image.open(in_path)
+        img = ImageOps.exif_transpose(img).convert("RGB")
+    except Exception as e:
+        print(f"Error opening image {in_path}: {e}")
+        return
+
+    # Hardcode the bottom layer color to white and the text color to black
+    bottom_color = (255, 255, 255)  # Always white
+    text_color = (0, 0, 0)  # Always black
+
+    # Define font size relative to the image height (70% smaller than before)
+    font_path = Path("fonts/arial.ttf")  # Path to the font file
+    font_size = int(img.height * 0.015)  # Fixed font size (~1.5% of image height)
+    try:
+        font = ImageFont.truetype(str(font_path), font_size)
+    except OSError:
+        print(f"⚠️  Warning: '{font_path}' not found. Using default font.")
+        font = ImageFont.load_default()
+
+    # Wrap the text if it exceeds the maximum width
+    draw = ImageDraw.Draw(img)
+    max_width = int(img.width * 0.8)  # Text width should not exceed 80% of image width
+
+    def wrap_text(text, font, max_width):
+        lines = []
+        words = text.split()
+        line = ""
+        for word in words:
+            test_line = f"{line} {word}".strip()
+            text_width = draw.textbbox((0, 0), test_line, font=font)[2]
+            if text_width <= max_width:
+                line = test_line
+            else:
+                lines.append(line)
+                line = word
+        if line:
+            lines.append(line)
+        return lines
+
+    wrapped_text = wrap_text(custom_text, font, max_width)
+
+    # Calculate total text height
+    line_height = draw.textbbox((0, 0), "A", font=font)[3]  # Height of one line
+    total_text_height = line_height * len(wrapped_text) + int(font_size * 0.5)
+
+    # Add a bottom layer proportional to the total text height
+    bottom_height = total_text_height + int(font_size * 0.5)
+    new_img = Image.new("RGB", (img.width, img.height + bottom_height), bottom_color)
+    new_img.paste(img, (0, 0))
+
+    # Draw the wrapped text on the bottom layer
+    draw = ImageDraw.Draw(new_img)
+    text_y = img.height + int(font_size * 0.25)
+    for line in wrapped_text:
+        text_width = draw.textbbox((0, 0), line, font=font)[2]
+        text_x = (new_img.width - text_width) // 2
+        draw.text((text_x, text_y), line, font=font, fill=text_color)
+        text_y += line_height
+
+    # Save the modified image
+    out_file = Path(out_path).with_name(re.sub(r'[ \(\)]', '_', Path(out_path).name))
+    new_img.save(out_file)
+    print(f"Burned-in metadata to {out_file}")
+
+
+def show_preview(image_path, root):
+    try:
+        # Load the image
+        img = Image.open(image_path)
+        img.thumbnail((300, 300))  # Resize the image for preview
+
+        # Create a new top-level window for the preview
+        preview_window = tk.Toplevel(root)
+        preview_window.title("Image Preview")
+
+        # Ensure the window comes to the front
+        preview_window.attributes('-topmost', True)
+        preview_window.update()
+        preview_window.attributes('-topmost', False)
+
+        # Convert the image to a format tkinter can use
+        tk_img = ImageTk.PhotoImage(img)
+
+        # Add the image to the tkinter window
+        label = tk.Label(preview_window, image=tk_img)
+        label.image = tk_img  # Keep a reference to the image to prevent garbage collection
+        label.pack()
+
+        # Center the window on the screen
+        window_width = 320
+        window_height = 320
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        position_top = int(screen_height / 2 - window_height / 2)
+        position_right = int(screen_width / 2 - window_width / 2)
+        preview_window.geometry(f"{window_width}x{window_height}+{position_right}+{position_top}")
+
+        return preview_window
+    except Exception as e:
+        print(f"⚠️  Warning: Error showing preview for {image_path}: {e}")
+
+
 #################### MAIN OPERATIONAL FUNCTIONS ###################
 
 
 # Burn-in metadata to photographs with optional custom text and date for longjevity
-def burn_in_metadata() -> None:
+def burn_in_metadata_basic() -> None:
     print("\n" + "═" * 50)
-    print("🔥  Burn-in Metadata to Photographs  🔥".center(50))
+    print("🔥  Burn-in (basic) Metadata to Photographs  🔥".center(50))
     print("═" * 50)
     image_path = input(" Enter path to the image or folder: ").strip()
     output_path = input(" Enter output path (leave blank to overwrite original): ").strip()
@@ -174,6 +286,93 @@ def burn_in_metadata() -> None:
             except EOFError: custom_text = ""
             process_image(path, out_file, custom_text if custom_text else None)
         else: process_image(path, out_file, custom_text)
+
+
+def burn_in_metadata_verbose():
+    def process_next_image():
+        nonlocal image_paths, current_window
+
+        # If there are no more images, exit the application
+        if not image_paths:
+            print("✅ All images have been processed.")
+            if current_window:
+                current_window.destroy()  # Close the last preview window
+            root.destroy()  # Close the main Tkinter window
+            return
+
+        # Get the next image path from the list
+        img_path = image_paths.pop(0)
+
+        # Show the preview for the current image
+        if current_window:
+            current_window.destroy()  # Close the previous window
+        current_window = show_preview(img_path, root)
+
+        # Prompt the user for input (non-blocking)
+        def on_submit():
+            # Get the caption entered by the user
+            custom_text = caption_entry.get().strip()
+            if custom_text:
+                out_file = (output_folder / img_path.name) if output_folder else img_path
+                process_image(img_path, out_file, custom_text)
+            caption_entry.delete(0, tk.END)  # Clear the input field
+
+            # Process the next image
+            process_next_image()
+
+        # Update the UI components for the current image
+        caption_label.config(text=f"Enter custom text for '{img_path.name}' (leave blank for none):")
+        submit_button.config(command=on_submit)
+
+    # Initialize paths
+    image_path = input(" Enter path to the image or folder: ").strip()
+    output_path = input(" Enter output path (leave blank to overwrite original): ").strip()
+    include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
+
+    path = Path(image_path)
+    if not path.exists():
+        print(f"❌ Path not found: {image_path}")
+        return
+
+    # Gather all images
+    if path.is_dir():
+        files = path.rglob('*') if include_subdirs else path.glob('*')
+        image_paths = [p for p in files if p.suffix.lower() in ['.jpg', '.jpeg', '.png']]
+    else:
+        if path.suffix.lower() not in [".jpg", ".jpeg", ".png"]:
+            print(f"❌ File is not a supported image: {image_path}")
+            return
+        image_paths = [path]
+
+    if not image_paths:
+        print(f"❌ No images found in {image_path}")
+        return
+
+    # Prepare output folder
+    output_folder = Path(output_path) if output_path else None
+    if output_folder:
+        output_folder.mkdir(parents=True, exist_ok=True)
+
+    # Create the Tkinter root window
+    root = tk.Tk()
+    root.title("Burn-in Metadata")
+
+    # Add UI components to the main window
+    caption_label = tk.Label(root, text="Enter custom text:", wraplength=400)
+    caption_label.pack(pady=10)
+
+    caption_entry = tk.Entry(root, width=50)
+    caption_entry.pack(pady=5)
+
+    submit_button = tk.Button(root, text="Submit")
+    submit_button.pack(pady=10)
+
+    # Start processing the first image
+    current_window = None
+    process_next_image()
+
+    # Run the Tkinter event loop
+    root.mainloop()
 
 
 # Rename digital or film photographs based on EXIF data or custom date

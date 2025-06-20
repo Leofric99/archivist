@@ -6,6 +6,8 @@ Configuration options for the run module, including file extensions and EXIF tag
 # Determines the minimum number of photos required to create an event folder when restructuring folders.
 EVENT_FOLDER_THRESHOLD = 10
 
+FONT = 'Arial.ttf'  # Default font for metadata burning
+
 IMAGE_EXTENSIONS = [
     '.jpg', '.jpeg', '.jpe', '.jif', '.jfif', '.jfi',
     '.png', '.apng',
