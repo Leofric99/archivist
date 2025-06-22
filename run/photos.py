@@ -4,6 +4,7 @@ from pathlib import Path
 import tkinter as tk
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags, TiffImagePlugin, ImageTk
 from datetime import datetime
+import concurrent.futures
 import threading
 import warnings
 from queue import Queue
@@ -482,7 +483,7 @@ def rename_film() -> None:
     if re.fullmatch(r"\d{8}", date_str): fmt = "%Y%m%d"
     elif re.fullmatch(r"\d{6}", date_str): fmt = "%Y%m"
     elif re.fullmatch(r"\d{4}", date_str): fmt = "%Y"
-    else: raise ValueError("Invalid date format. Use YYYYMMDD, YYYYMM, or YYYY.")
+    else: raise ValueError("Invalid date format. Use YYYYMMDD, YYYYMM, or YYYYMMDD.")
     try:
         padded = date_str + ("0101" if fmt == "%Y" else "01" if fmt == "%Y%m" else "")
         datetime.strptime(padded, "%Y%m%d")
@@ -655,14 +656,21 @@ def restructure_folders() -> None:
     print("📁  Restructure Photo/Video Folders  📁".center(50))
     print("═" * 50)
     src_dir = input("Enter path to source photo/video directory: ").strip()
+    if platform.system() == 'Linux' and ':' in src_dir and '\\' in src_dir:
+        src_dir = convert_windows_path_to_wsl(src_dir)
     src_dir = Path(src_dir).expanduser().resolve()
     if not src_dir.is_dir():
         print(f"Not a directory: {src_dir}")
         return
 
     # Regex for standard naming, capturing suffix before optional index (e.g., _bratislava or _bratislava_1)
-    pattern1 = re.compile(r'^\d{8}_\d{6}(?:_([a-z0-9]+))?(?:_(\d+))?\.[a-z0-9]+$', re.IGNORECASE)
-    pattern2 = re.compile(r'^\d{6}_\d{6}(?:_([a-z0-9]+))?(?:_(\d+))?\.[a-z0-9]+$', re.IGNORECASE)
+    # Accepts any filename starting with YYYYMMDD_HHMMSS and anything after, before the extension
+    pattern1 = re.compile(
+        r'^(\d{8})_(\d{6})((?:_[a-z0-9]+)*)(?:_([0-9]+))?\.[a-z0-9]+$', re.IGNORECASE
+    )
+    pattern2 = re.compile(
+        r'^(\d{6})_(\d{6})((?:_[a-z0-9]+)*)(?:_([0-9]+))?\.[a-z0-9]+$', re.IGNORECASE
+    )
 
     all_exts = set(IMAGE_EXTENSIONS + RAW_EXTENSIONS + VIDEO_EXTENSIONS + ['.psd'])
     files = [
@@ -670,6 +678,9 @@ def restructure_folders() -> None:
         if f.is_file()
         and f.suffix.lower() in all_exts
     ]
+
+    if not files:
+        print("No files found in the source directory!")
 
     nonconforming = [f for f in files if not (pattern1.match(f.name) or pattern2.match(f.name))]
     if nonconforming:
@@ -680,50 +691,85 @@ def restructure_folders() -> None:
         return
 
     root_dir = input("Enter path to root folder for restructured files: ").strip()
+    if platform.system() == 'Linux' and ':' in root_dir and '\\' in root_dir:
+        root_dir = convert_windows_path_to_wsl(root_dir)
     root_dir = Path(root_dir).expanduser().resolve()
-    if src_dir == root_dir:
-        print("❌ ERROR: The root directory cannot be the same as the source directory. Please choose a different root folder.")
-        return
-
-    print(f"\nWARNING: All contents of {root_dir} will be deleted!")
-    confirm = input("Proceed? (y/n): ").strip().lower()
-    if confirm != 'y':
-        print("Aborted.")
-        return
-    confirm2 = input("Are you absolutely sure? (y/n): ").strip().lower()
-    if confirm2 != 'y':
-        print("Aborted.")
-        return
+    same_dir = (src_dir == root_dir)
+    if same_dir:
+        print("⚠️  WARNING: The root directory is the same as the source directory.")
+        print("This operation will be PERMANENT and IRREVERSIBLE. All files will be moved and the original structure will be lost.")
+        confirm = input("Are you absolutely sure you want to proceed? (type 'yes' to continue): ").strip().lower()
+        if confirm != 'yes':
+            print("Aborted.")
+            return
+    else:
+        print(f"\nWARNING: All contents of {root_dir} will be deleted!")
+        confirm = input("Proceed? (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("Aborted.")
+            return
+        confirm2 = input("Are you absolutely sure? (y/n): ").strip().lower()
+        if confirm2 != 'y':
+            print("Aborted.")
+            return
 
     files_to_process = list(files)
 
-    # Delete everything in root_dir
-    if root_dir.exists():
-        for item in root_dir.iterdir():
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
+    # Only clear out the root_dir if it's not the same as src_dir
+    if not same_dir:
+        if root_dir.exists():
+            for item in root_dir.iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+        else:
+            root_dir.mkdir(parents=True, exist_ok=True)
     else:
-        root_dir.mkdir(parents=True, exist_ok=True)
+        if not root_dir.exists():
+            root_dir.mkdir(parents=True, exist_ok=True)
 
     files = files_to_process
 
     # Parse file info and group by suffix
     suffix_groups = defaultdict(list)
+    no_suffix_groups = defaultdict(list)  # For files with no event suffix
+
     for f in files:
         m1 = pattern1.match(f.name)
         m2 = pattern2.match(f.name)
         suffix = None
         date_str = None
         if m1:
-            date_str = f.name[:8]
-            suffix = m1.group(1) if m1.group(1) else None
+            date_str = m1.group(1)
+            suffixes = m1.group(3)
+            index = m1.group(4)
+            if suffixes:
+                parts = suffixes.strip('_').split('_')
+                # If the last part is a number and the second-to-last is not, treat as "Event Year"
+                if len(parts) >= 2 and parts[-1].isdigit() and not parts[-2].isdigit():
+                    suffix = f"{parts[-2].capitalize()} {parts[-1]}"
+                # If only the last part is a number, ignore as suffix (not a group)
+                elif len(parts) == 1 and parts[-1].isdigit():
+                    suffix = None
+                else:
+                    # Join all as one event (e.g., beach_party2)
+                    suffix = '_'.join(parts).capitalize()
         elif m2:
-            date_str = f.name[:6]
-            suffix = m2.group(1) if m2.group(1) else None
+            date_str = m2.group(1)
+            suffixes = m2.group(3)
+            index = m2.group(4)
+            if suffixes:
+                parts = suffixes.strip('_').split('_')
+                if len(parts) >= 2 and parts[-1].isdigit() and not parts[-2].isdigit():
+                    suffix = f"{parts[-2].capitalize()} {parts[-1]}"
+                elif len(parts) == 1 and parts[-1].isdigit():
+                    suffix = None
+                else:
+                    suffix = '_'.join(parts).capitalize()
         else:
             continue  # Should not happen
+
         # Parse date
         if len(date_str) == 8:
             year = int(date_str[:4])
@@ -734,7 +780,8 @@ def restructure_folders() -> None:
             month = int(date_str[2:4])
             day = 1
         dt = datetime(year, month, day)
-        suffix_groups[suffix].append({
+
+        info = {
             'path': f,
             'year': year,
             'month': month,
@@ -742,14 +789,48 @@ def restructure_folders() -> None:
             'date': dt,
             'suffix': suffix,
             'name': f.name
-        })
+        }
+
+        if suffix:
+            suffix_groups[suffix].append(info)
+        else:
+            # Group by year and month for files with no suffix
+            no_suffix_groups[(year, month)].append(info)
 
     # Count suffix occurrences for folder logic
     suffix_counts = {k: len(v) for k, v in suffix_groups.items()}
 
-    # Track all destination files to avoid duplicate copy attempts
+    # Track all destination files to avoid duplicate move attempts
     copied_files = set()
 
+    def move_or_copy_file(info, dest, same_dir):
+        # Ensure the destination folder exists before moving/copying
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        # Avoid duplicate move/copy attempts
+        if dest in copied_files:
+            return f"Skipped {info['path'].name}: already processed."
+        try:
+            if info['path'].resolve() == dest.resolve():
+                return f"Skipped {info['path'].name}: source and destination are the same file."
+        except FileNotFoundError:
+            return f"Source file not found: {info['path']}. Skipping."
+        try:
+            if same_dir:
+                info['path'].rename(dest)
+                action = "Moved"
+            else:
+                shutil.copy2(info['path'], dest)
+                action = "Copied"
+            copied_files.add(dest)
+            return f"{action} {info['path'].name} -> {dest}"
+        except FileNotFoundError:
+            return f"File not found during operation: {info['path']} -> {dest}. Skipping."
+        except Exception as e:
+            return f"Error processing {info['path']} -> {dest}: {e}"
+
+    tasks = []
+
+    # Handle event groups
     for suffix, group in suffix_groups.items():
         # Sort by date
         group = sorted(group, key=lambda x: x['date'])
@@ -759,7 +840,7 @@ def restructure_folders() -> None:
         for prev, curr in zip(group, group[1:]):
             year_diff = (curr['date'].year - prev['date'].year)
             if year_diff > 1:
-                print(f"\nThe following files in group '{suffix or 'no suffix'}' are more than 1 year apart:")
+                print(f"\nThe following files in group '{suffix}' are more than 1 year apart:")
                 print(f"  {prev['name']} ({prev['date'].date()})")
                 print(f"  {curr['name']} ({curr['date'].date()})")
                 ans = input("Should these be grouped together? (y/n): ").strip().lower()
@@ -777,39 +858,37 @@ def restructure_folders() -> None:
         for folder_files in folders:
             earliest = min(folder_files, key=lambda x: x['date'])
             folder_year = earliest['year']
-            folder_month = earliest['month']
-            folder_suffix = earliest['suffix']
             decade = f"{(folder_year // 10) * 10}s"
             year_folder = f"{folder_year}"
+            folder_suffix = earliest['suffix']
             # Only create a suffix folder if there are at least 10 photos with the same suffix
             if folder_suffix and suffix_counts.get(folder_suffix, 0) >= EVENT_FOLDER_THRESHOLD:
-                target_folder = root_dir / decade / year_folder / folder_suffix.capitalize()
+                target_folder = root_dir / decade / year_folder / folder_suffix
             else:
-                month_name = datetime(folder_year, folder_month, 1).strftime("%B")
-                month_folder = f"{folder_month}. {month_name}"
+                # fallback to month folder if not enough for event
+                month_name = datetime(folder_year, earliest['month'], 1).strftime("%B")
+                month_folder = f"{earliest['month']}. {month_name}"
                 target_folder = root_dir / decade / year_folder / month_folder
             target_folder.mkdir(parents=True, exist_ok=True)
             for info in folder_files:
                 dest = target_folder / info['name']
-                # Ensure the destination folder exists before copying
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                # Avoid duplicate copy attempts
-                if dest in copied_files:
-                    continue
-                # If source and destination are the same file, skip
-                try:
-                    if info['path'].resolve() == dest.resolve():
-                        print(f"Skipped copying {info['path'].name}: source and destination are the same file.")
-                        continue
-                except FileNotFoundError:
-                    # If the source file does not exist, skip
-                    print(f"Source file not found: {info['path']}. Skipping.")
-                    continue
-                try:
-                    shutil.copy2(info['path'], dest)
-                    print(f"Copied {info['path'].name} -> {dest}")
-                    copied_files.add(dest)
-                except FileNotFoundError:
-                    print(f"File not found during copy: {info['path']} -> {dest}. Skipping.")
-                except Exception as e:
-                    print(f"Error copying {info['path']} -> {dest}: {e}")
+                tasks.append((info, dest, same_dir))
+
+    # Handle files with no suffix: group by year and month
+    for (year, month), group in no_suffix_groups.items():
+        decade = f"{(year // 10) * 10}s"
+        year_folder = f"{year}"
+        month_name = datetime(year, month, 1).strftime("%B")
+        month_folder = f"{month}. {month_name}"
+        target_folder = root_dir / decade / year_folder / month_folder
+        target_folder.mkdir(parents=True, exist_ok=True)
+        for info in group:
+            dest = target_folder / info['name']
+            tasks.append((info, dest, same_dir))
+
+    # Use ThreadPoolExecutor for parallel move/copy
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_task = {executor.submit(move_or_copy_file, info, dest, same_dir): (info, dest) for info, dest, same_dir in tasks}
+        for future in concurrent.futures.as_completed(future_to_task):
+            result = future.result()
+            print(result)
