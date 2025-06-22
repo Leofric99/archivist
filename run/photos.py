@@ -381,6 +381,7 @@ def rename_digital() -> None:
     print("\n" + "═" * 50)
     print("🖼️  Rename Digital Photographs  🖼️".center(50))
     print("═" * 50)
+    print("\nNote: For events, please use strings without numbers e.g. Italy, or Trip to Yorkshire.\nIf you fail to do this the the Restructure Folders function will not work correctly.\n")
     folder_path = input(" Enter folder path: ").strip()
     include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
     include_raw = input(" Include RAW files? (y/n): ").strip().lower() == 'y'
@@ -743,29 +744,36 @@ def restructure_folders() -> None:
         if m1:
             date_str = m1.group(1)
             suffixes = m1.group(3)
+            # Remove trailing _N index and clean up
+            cleaned_suffixes = re.sub(r'_\d+$', '', suffixes)
             index = m1.group(4)
-            if suffixes:
-                parts = suffixes.strip('_').split('_')
+            if cleaned_suffixes:
+                parts = cleaned_suffixes.strip('_').split('_')
                 # If the last part is a number and the second-to-last is not, treat as "Event Year"
                 if len(parts) >= 2 and parts[-1].isdigit() and not parts[-2].isdigit():
                     suffix = f"{parts[-2].capitalize()} {parts[-1]}"
-                # If only the last part is a number, ignore as suffix (not a group)
                 elif len(parts) == 1 and parts[-1].isdigit():
                     suffix = None
                 else:
                     # Join all as one event (e.g., beach_party2)
                     suffix = '_'.join(parts).capitalize()
+
         elif m2:
             date_str = m2.group(1)
             suffixes = m2.group(3)
+            # Remove trailing _N index and clean up
+            cleaned_suffixes = re.sub(r'_\d+$', '', suffixes)
+
             index = m2.group(4)
-            if suffixes:
-                parts = suffixes.strip('_').split('_')
+            if cleaned_suffixes:
+                parts = cleaned_suffixes.strip('_').split('_')
+                # If the last part is a number and the second-to-last is not, treat as "Event Year"
                 if len(parts) >= 2 and parts[-1].isdigit() and not parts[-2].isdigit():
                     suffix = f"{parts[-2].capitalize()} {parts[-1]}"
                 elif len(parts) == 1 and parts[-1].isdigit():
                     suffix = None
                 else:
+                    # Join all as one event (e.g., beach_party2)
                     suffix = '_'.join(parts).capitalize()
         else:
             continue  # Should not happen
@@ -892,3 +900,18 @@ def restructure_folders() -> None:
         for future in concurrent.futures.as_completed(future_to_task):
             result = future.result()
             print(result)
+
+    # Delete any folder inside the destination (root_dir) that does not contain images anywhere in its subtree
+    for folder in sorted(root_dir.rglob('*'), key=lambda f: -len(f.parts)):
+        if folder.is_dir():
+            # Check if the folder or any subfolder contains image or video files
+            has_media = any(
+                f.is_file() and f.suffix.lower() in (IMAGE_EXTENSIONS + VIDEO_EXTENSIONS)
+                for f in folder.rglob('*')
+            )
+            if not has_media:
+                try:
+                    shutil.rmtree(folder)
+                    print(f"Deleted empty folder (no images in subtree): {folder}")
+                except Exception as e:
+                    print(f"Failed to delete folder {folder}: {e}")
