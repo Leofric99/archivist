@@ -154,17 +154,27 @@ def burn_in_metadata_video() -> None:
         display_text = f"{timestamp}{f' | {custom_text}' if custom_text else ''}"
 
         fontfile = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        # Escape single quotes and colons for ffmpeg drawtext
-        safe_text = display_text.replace(":", r'\:').replace("'", r"\'")
+        # Escape text for ffmpeg drawtext - only escape characters that need it
+        # Use double quotes for text and escape double quotes in the display_text
+        safe_text = display_text.replace("\\", "\\\\").replace('"', '\\"').replace(":", "\\:")
         drawtext = (
-            f"drawtext=fontfile='{fontfile}':"
-            f"text='{safe_text}':"
+            f'drawtext=fontfile=\'{fontfile}\':'
+            f'text="{safe_text}":'
             "fontcolor=white:fontsize=24:borderw=2:bordercolor=black@0.7:"
             "box=1:boxcolor=black@0.4:boxborderw=5:"
             "x=w-tw-20:y=h-th-20"
         )
 
-        out_file = Path(out_path).with_name(re.sub(r'[ \(\)]', '_', Path(out_path).name))
+        # Handle output file path - create temp file if overwriting original
+        if str(in_path) == str(out_path):
+            # Create temporary file in same directory as original
+            temp_suffix = f"_temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            out_file = in_path.with_stem(in_path.stem + temp_suffix)
+            is_temp_file = True
+        else:
+            out_file = Path(out_path).with_name(re.sub(r'[ \(\)]', '_', Path(out_path).name))
+            is_temp_file = False
+        
         out_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Detect GPU codec
@@ -184,8 +194,18 @@ def burn_in_metadata_video() -> None:
         ]
         try:
             subprocess.run(cmd, check=True)
-            print(f"Burned-in metadata to {out_file}")
+            
+            # If we created a temp file, replace the original
+            if is_temp_file:
+                in_path.unlink()  # Remove original
+                out_file.rename(in_path)  # Rename temp to original
+                print(f"Burned-in metadata to {in_path} (overwritten)")
+            else:
+                print(f"Burned-in metadata to {out_file}")
         except subprocess.CalledProcessError as e:
+            # Clean up temp file if it exists and there was an error
+            if is_temp_file and out_file.exists():
+                out_file.unlink()
             print(f"Error processing video {in_path}: {e}")
 
     if not path.exists():
