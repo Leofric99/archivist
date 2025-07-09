@@ -37,11 +37,12 @@ def photos_menu() -> str:
     print(" 1. Rename Photographs to Standard Format")
     print(" 2. Burn-in (basic) Information to Photographs")
     print(" 3. Burn-in (verbose) Information to Photographs")
-    print(" 4. Export Image Metadata to a CSV or JSON File")
-    print(" 5. Import Image Metadata from a CSV or JSON File")
-    print(" 6. Restructure Folder Structure")
-    print(" 7. Back to Main Menu")
-    print(" 8. Exit the Archivist Utility")
+    print(" 4. Replace Metadata with that of another Photograph (for images with missing metadata)")
+    print(" 5. Export Image Metadata to a CSV or JSON File")
+    print(" 6. Import Image Metadata from a CSV or JSON File")
+    print(" 7. Restructure Folder Structure")
+    print(" 8. Back to Main Menu")
+    print(" 9. Exit the Archivist Utility")
     print("═" * 50)
 
     while True:
@@ -87,15 +88,17 @@ def main() -> None:
                 elif photos_choice == '3':
                     photos.burn_in_metadata_verbose()
                 elif photos_choice == '4':
-                    photos.export_metadata()
+                    photos.clone_metadata()
                 elif photos_choice == '5':
-                    photos.import_metadata()
+                    photos.export_metadata()
                 elif photos_choice == '6':
-                    photos.restructure_folders()
+                    photos.import_metadata()
                 elif photos_choice == '7':
+                    photos.restructure_folders()
+                elif photos_choice == '8':
                     print("Returning to the Main Menu...")
                     break
-                elif photos_choice == '8':
+                elif photos_choice == '9':
                     print("👋  Exiting the Archivist Utility. Goodbye!")
                     exit()
         elif choice == '2':

@@ -2,6 +2,7 @@ from .config import IMAGE_EXTENSIONS, RAW_EXTENSIONS, VIDEO_EXTENSIONS, EXIF_TAG
 import platform
 from pathlib import Path
 import tkinter as tk
+from tkinter import filedialog
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ExifTags, TiffImagePlugin, ImageTk
 from datetime import datetime
 import concurrent.futures
@@ -13,6 +14,8 @@ import csv
 import json
 import shutil
 from collections import defaultdict
+import pyexiv2
+import os
 
 
 #################### CONFIGURATION ################
@@ -649,6 +652,123 @@ def import_metadata() -> None:
             print(f"Failed to update {fname}: {e}")
 
     print(f"Done. Updated {updated} files.")
+
+
+def clone_metadata() -> None:
+    print("\n" + "═" * 50)
+    print("📂  Clone Metadata from One Image to Another  📂".center(50))
+    print("═" * 50)
+    
+    # Ask user for input method
+    use_browser = input(" Use file browser to select files? (y/n): ").strip().lower() == 'y'
+    
+    if use_browser:
+        # Create a hidden root window
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        
+        # Select source image
+        print(" Opening file browser to select source image...")
+        image_extensions = [f"*{ext}" for ext in IMAGE_EXTENSIONS]
+        file_types = [
+            ("Image files", " ".join(image_extensions)),
+            ("All files", "*.*")
+        ]
+        
+        source_path = filedialog.askopenfilename(
+            title="Select source image",
+            filetypes=file_types
+        )
+        
+        if not source_path:
+            print("No source file selected. Aborted.")
+            root.destroy()
+            return
+        
+        source_path = Path(source_path)
+        print(f" Source image selected: {source_path}")
+        
+        # Select destination images (multiple selection)
+        print(" Opening file browser to select destination images...")
+        target_paths = filedialog.askopenfilenames(
+            title="Select destination images (you can select multiple)",
+            filetypes=file_types
+        )
+        
+        if not target_paths:
+            print("No destination files selected. Aborted.")
+            root.destroy()
+            return
+        
+        target_paths = [Path(path) for path in target_paths]
+        print(f" Selected {len(target_paths)} destination image(s)")
+        
+        root.destroy()
+    else:
+        # Manual input method
+        source_input = input(" Enter path to source image: ").strip()
+        target_input = input(" Enter path(s) to target image(s) (separate multiple paths with ;): ").strip()
+        
+        source_path = Path(source_input).expanduser().resolve()
+        
+        # Handle multiple target paths separated by semicolon
+        if ';' in target_input:
+            target_paths = [Path(path.strip()).expanduser().resolve() for path in target_input.split(';')]
+        else:
+            target_paths = [Path(target_input).expanduser().resolve()]
+
+    # Validate source file
+    if not source_path.is_file():
+        print(f"Source file not found: {source_path}")
+        return
+    
+    # Validate target files
+    valid_targets = []
+    for target_path in target_paths:
+        if not target_path.is_file():
+            print(f"Target file not found: {target_path}")
+            continue
+        valid_targets.append(target_path)
+    
+    if not valid_targets:
+        print("No valid target files found.")
+        return
+
+    # Clone metadata to each target, including file creation/modification dates
+    try:
+        # Read metadata from source
+        with pyexiv2.Image(str(source_path)) as source_img:
+            exif_data = source_img.read_exif()
+            iptc_data = source_img.read_iptc()
+            xmp_data = source_img.read_xmp()
+
+        # Get source file timestamps
+        stat = source_path.stat()
+        created_time = stat.st_ctime
+        modified_time = stat.st_mtime
+
+        # Write metadata and timestamps to each target
+        successful_clones = 0
+        for target_path in valid_targets:
+            try:
+                with pyexiv2.Image(str(target_path)) as target_img:
+                    target_img.modify_exif(exif_data)
+                    target_img.modify_iptc(iptc_data)
+                    target_img.modify_xmp(xmp_data)
+                # Set file timestamps to match source
+                try:
+                    os.utime(target_path, (created_time, modified_time))
+                except Exception as ts_e:
+                    print(f"⚠️  Could not set timestamps for {target_path.name}: {ts_e}")
+                print(f"✅ Metadata cloned from {source_path.name} to {target_path.name}")
+                successful_clones += 1
+            except Exception as e:
+                print(f"❌ Failed to clone metadata to {target_path.name}: {e}")
+
+        print(f"\n📊 Summary: Successfully cloned metadata to {successful_clones} out of {len(valid_targets)} target files.")
+
+    except Exception as e:
+        print(f"❌ Failed to read metadata from source image {source_path.name}: {e}")
 
 
 # Restructure photo/video folders based on naming conventions and date
