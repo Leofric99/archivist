@@ -203,8 +203,8 @@ def burn_in_metadata_basic() -> None:
     print("\n" + "═" * 50)
     print("🔥  Burn-in (basic) Metadata to Photographs  🔥".center(50))
     print("═" * 50)
-    image_path = input(" Enter path to the image or folder: ").strip()
-    output_path = input(" Enter output path (leave blank to overwrite original): ").strip()
+    image_path = input(" Enter path to the image or folder: ").strip().strip("'\"")
+    output_path = input(" Enter output path (leave blank to overwrite original): ").strip().strip("'\"")
     per_photo_suffix = input(" Add suffix to each photo individually? (y/n): ").strip().lower() == 'y'
     custom_text = None if per_photo_suffix else input(" Enter custom text to burn in to all photos: ").strip()
     use_custom_date = input(" Use custom date? (y/n): ").strip().lower() == 'y'
@@ -329,8 +329,8 @@ def burn_in_metadata_verbose():
         submit_button.config(command=on_submit)
 
     # Initialize paths
-    image_path = input(" Enter path to the image or folder: ").strip()
-    output_path = input(" Enter output path (leave blank to overwrite original): ").strip()
+    image_path = input(" Enter path to the image or folder: ").strip().strip("'\"")
+    output_path = input(" Enter output path (leave blank to overwrite original): ").strip().strip("'\"")
     include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
 
     path = Path(image_path)
@@ -385,7 +385,7 @@ def rename_digital() -> None:
     print("🖼️  Rename Digital Photographs  🖼️".center(50))
     print("═" * 50)
     print("\nNote: For events, please use strings without numbers e.g. Italy, or Trip to Yorkshire.\nIf you fail to do this the the Restructure Folders function will not work correctly.\n")
-    folder_path = input(" Enter folder path: ").strip()
+    folder_path = input(" Enter folder path: ").strip().strip("'\"")
     include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
     include_raw = input(" Include RAW files? (y/n): ").strip().lower() == 'y'
     custom_suffix = input(" Custom suffix (leave blank for none): ").strip()
@@ -395,7 +395,7 @@ def rename_digital() -> None:
 
     # Convert Windows paths to WSL format if running on Linux
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
-    folder = Path(folder).resolve()
+    folder = Path(folder).expanduser().resolve()
     if not folder.is_dir(): raise ValueError(f"Not a directory: {folder}")
     files = folder.rglob('*') if include_subdirs else folder.iterdir()
     valid_exts = IMAGE_EXTENSIONS + RAW_EXTENSIONS if include_raw else IMAGE_EXTENSIONS
@@ -471,7 +471,7 @@ def rename_film() -> None:
     print("\n" + "═" * 50)
     print("🎞️  Rename Film Photographs  🎞️".center(50))
     print("═" * 50)
-    folder_path = input(" Enter folder path: ").strip()
+    folder_path = input(" Enter folder path: ").strip().strip("'\"")
     include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
     include_raw = input(" Include RAW files? (y/n): ").strip().lower() == 'y'
     custom_suffix = input(" Custom suffix (leave blank for none): ").strip()
@@ -481,7 +481,7 @@ def rename_film() -> None:
         print("❌  Invalid date format. Please enter date as YYYY or YYYYMM or YYYYMMDD.")
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
-    folder = Path(folder).resolve()
+    folder = Path(folder).expanduser().resolve()
     if not folder.is_dir(): raise ValueError(f"Not a directory: {folder}")
     date_str = custom_date.strip()
     if re.fullmatch(r"\d{8}", date_str): fmt = "%Y%m%d"
@@ -511,9 +511,9 @@ def export_metadata() -> None:
     print("\n" + "═" * 50)
     print("📤  Export Image Metadata  📤".center(50))
     print("═" * 50)
-    folder_path = input(" Enter folder path: ").strip()
+    folder_path = input(" Enter folder path: ").strip().strip("'\"")
     include_subdirs = input(" Include subdirectories? (y/n): ").strip().lower() == 'y'
-    output_dir = input(" Enter output directory: ").strip()
+    output_dir = input(" Enter output directory: ").strip().strip("'\"")
     output_formats = input(" Export format? (csv/json/both): ").strip().lower()
 
     folder = convert_windows_path_to_wsl(folder_path) if (platform.system() == 'Linux' and ':' in folder_path and '\\' in folder_path) else folder_path
@@ -568,7 +568,7 @@ def import_metadata() -> None:
     print("\n" + "═" * 50)
     print("✏️  Rewrite Metadata from File (using pyexiv2)  ✏️".center(50))
     print("═" * 50)
-    meta_path = input(" Enter path to metadata file (CSV or JSON): ").strip()
+    meta_path = input(" Enter path to metadata file (CSV or JSON): ").strip().strip("'\"")
     meta_file = Path(meta_path).expanduser().resolve()
     if not meta_file.exists():
         print(f"File not found: {meta_file}")
@@ -602,7 +602,7 @@ def import_metadata() -> None:
                 metadata_list.append(row)
 
     # Ask for folder containing images
-    img_folder = input("Enter folder containing images to update: ").strip()
+    img_folder = input("Enter folder containing images to update: ").strip().strip("'\"")
     img_folder = Path(img_folder).expanduser().resolve()
     if not img_folder.is_dir():
         print(f"Not a directory: {img_folder}")
@@ -776,7 +776,7 @@ def restructure_folders() -> None:
     print("\n" + "═" * 50)
     print("📁  Restructure Photo/Video Folders  📁".center(50))
     print("═" * 50)
-    src_dir = input("Enter path to source photo/video directory: ").strip()
+    src_dir = input("Enter path to source photo/video directory: ").strip().strip("'\"")
     if platform.system() == 'Linux' and ':' in src_dir and '\\' in src_dir:
         src_dir = convert_windows_path_to_wsl(src_dir)
     src_dir = Path(src_dir).expanduser().resolve()
@@ -811,7 +811,7 @@ def restructure_folders() -> None:
         print("Please rename these files before restructuring.")
         return
 
-    root_dir = input("Enter path to root folder for restructured files: ").strip()
+    root_dir = input("Enter path to root folder for restructured files: ").strip().strip("'\"")
     if platform.system() == 'Linux' and ':' in root_dir and '\\' in root_dir:
         root_dir = convert_windows_path_to_wsl(root_dir)
     root_dir = Path(root_dir).expanduser().resolve()
