@@ -1,0 +1,157 @@
+run/web/static/app.js
+  s_226f875aff5bc8::t_71cbc787c4227a 452,464,478
+  s_226f875aff5bc8::t_e641311d0a65a0 408,446,483-487
+  s_226f875aff5bc8::t_c2b1c5e57700f9 455-460
+  s_226f875aff5bc8::t_d082c6ede1457a 283
+  s_226f875aff5bc8::t_73394d87304608 6,180,185-189,196,200,203-282,284,286-359,631-641
+  s_226f875aff5bc8::t_94bd79e1b5d46a 1-5,7-179,181-184,190-195,197-199,201-202,360-407,409-445,447-451,453-454,461-463,465-477,479-482,488-618,620-630,642-645
+  s_226f875aff5bc8::t_1f2a14b52084d5 285
+  s_226f875aff5bc8::t_ead26e34658851 619
+run/web/thumbs.py
+  s_226f875aff5bc8::t_b568029c0cca03 1-121
+tests/conftest.py
+  s_226f875aff5bc8::t_2865f939652134 1-62
+run/web/app.py
+  s_226f875aff5bc8::t_9d506c516ac95c 107-109
+  s_226f875aff5bc8::t_458d40b7a6dba4 114
+  s_226f875aff5bc8::t_a9f28c6dcc8c3b 362-363,365,368,370
+  s_226f875aff5bc8::t_97c5d5cfea7027 1-10,12-14,16-18,20-24,27-58,64-89,94-101,103-106,110-113,115,118-120,124,128-142,144-211,227-299,301-361,364,366-367,369,371-381
+  s_226f875aff5bc8::t_9500f31f27561c 19
+  s_226f875aff5bc8::t_cc68476656997c 90-93,143
+  s_226f875aff5bc8::t_c2b1c5e57700f9 11,26,116-117
+  s_226f875aff5bc8::t_8c9f54e396d64a 25,59-63,212-226
+  s_226f875aff5bc8::t_a6757fdd18ffb5 102
+  s_226f875aff5bc8::t_9afe4061ae5ca0 15,121-123,125-127,300
+run/web/server.py
+  s_226f875aff5bc8::t_712b39116242c5 1-28,32-46
+  s_226f875aff5bc8::t_ca2c4ea5ccbc5c 29-31
+tests/test_crop.py
+  s_226f875aff5bc8::t_9d506c516ac95c 1-128
+tests/test_api.py
+  s_226f875aff5bc8::t_13ee86ce59be63 1-24,27-195
+  s_226f875aff5bc8::t_75dc0d36222cda 207-245
+  s_226f875aff5bc8::t_d229b024725647 196-203,205-206
+  s_226f875aff5bc8::t_f952f8608ee14c 204
+  s_226f875aff5bc8::t_4d150a7cfd5de6 25-26
+  s_226f875aff5bc8::t_141634c2382aff 246-255
+run/core/rename.py
+  s_226f875aff5bc8::t_5afb613e38b6b3 1-173,209-249
+  s_226f875aff5bc8::t_8c9f54e396d64a 174-208
+run/cli.py
+  s_226f875aff5bc8::t_a6757fdd18ffb5 29
+  s_226f875aff5bc8::t_d30b04381ded60 36,38-41,43-47,49-50
+  s_226f875aff5bc8::t_3f1f7302fb5ff3 1-28,30-35,37,42,48,51-173
+run/config.py
+  s_226f875aff5bc8::t_a8ef75b78807a0 10-12
+run/web/static/crop-editor.js
+  s_226f875aff5bc8::t_129b72fbf9b2a9 56,81-84,100,104-107,214
+  s_226f875aff5bc8::t_68f3e36164f1bb 1-55,57-80,85-99,101-103,108-213,215-248
+run/web/static/style.css
+  s_226f875aff5bc8::t_e641311d0a65a0 142-153,158-172
+  s_226f875aff5bc8::t_4d07625e619d6e 1-22,24-73,77-80,82-100,117-141,173-199,211-216,218-221
+  s_226f875aff5bc8::t_129b72fbf9b2a9 154-157
+  s_226f875aff5bc8::t_c17eb3f9a27c57 23
+  s_226f875aff5bc8::t_d082c6ede1457a 74,116,207-208
+  s_226f875aff5bc8::t_c1f0cc10b39ae6 75-76,81,101-115,200-206,209-210,217
+tests/test_dates.py
+  s_226f875aff5bc8::t_5d4498cc63f915 1-32,34-36
+  s_226f875aff5bc8::t_19d905f735357e 33,37-42
+tests/test_restructure.py
+  s_226f875aff5bc8::t_9328db71091202 1-6,8-18,20-96
+  s_226f875aff5bc8::t_6ee60937168b47 97
+  s_226f875aff5bc8::t_0dfdc7913d926a 7
+  s_226f875aff5bc8::t_0625ced4c34aa8 19
+run/core/restructure.py
+  s_226f875aff5bc8::t_f29d86e5afe12c 1-13,15-168,170-171,173-252
+  s_226f875aff5bc8::t_0dfdc7913d926a 14,169,172
+run/core/__init__.py
+  s_226f875aff5bc8::t_4a13b7b54de8c6 1
+tests/test_photo_ops.py
+  s_226f875aff5bc8::t_e643b1184d3872 129-130,136-137
+  s_226f875aff5bc8::t_1456581b4ad81b 166-178,181
+  s_226f875aff5bc8::t_3f507f14a3311b 131-135
+  s_226f875aff5bc8::t_00093a2ea0b038 3,120
+  s_226f875aff5bc8::t_a8ef75b78807a0 182-189
+  s_226f875aff5bc8::t_780e61a11faab7 1-2,4-119,121-128
+  s_226f875aff5bc8::t_c2b1c5e57700f9 138-165
+  s_226f875aff5bc8::t_bc594ba90ee434 179-180
+.gitignore
+  s_9e378c1efa801b::t_a16d1133e0444d 5
+requirements-dev.txt
+  s_226f875aff5bc8::t_675be907b21d77 1-3
+run/core/dates.py
+  s_226f875aff5bc8::t_503653c80de644 1-144
+tests/test_rename.py
+  s_226f875aff5bc8::t_75dc0d36222cda 86-122
+  s_226f875aff5bc8::t_f6326c732b4c56 43-49
+  s_226f875aff5bc8::t_eff36f1035ba2f 27-28
+  s_226f875aff5bc8::t_b27ff1982f9e34 1-26,29-42,50-85
+requirements.txt
+  s_226f875aff5bc8::t_9db7ddc1af72b1 3-4
+run/core/crop.py
+  s_226f875aff5bc8::t_7dfa4128494282 1-169
+run/core/ops.py
+  s_226f875aff5bc8::t_f066e9fa3eaa16 4,10
+  s_226f875aff5bc8::t_7ea8cdff1c9ea6 1-3,5-9,11-21
+run/web/static/index.html
+  s_226f875aff5bc8::t_61804aaf746547 1-6,8-11,13-30,32-35,37-39,42-55,57-59
+  s_226f875aff5bc8::t_5e31eb9961f6ee 7,12
+  s_226f875aff5bc8::t_73394d87304608 31,36,40-41
+  s_226f875aff5bc8::t_e641311d0a65a0 56
+run/web/jobs.py
+  s_226f875aff5bc8::t_264ed017382234 71,76,80-83
+  s_226f875aff5bc8::t_bf8baa0dd14e9e 1-56,60-70,72-75,77-79
+  s_226f875aff5bc8::t_8c9f54e396d64a 57-59
+run/__main__.py
+  s_226f875aff5bc8::t_843fc85ba3e05d 1-42
+run/core/common.py
+  s_226f875aff5bc8::t_a6757fdd18ffb5 133-134,136-141,145,174
+  s_226f875aff5bc8::t_f066e9fa3eaa16 272,279
+  s_226f875aff5bc8::t_e2c3a569d53690 1-132,135,142-144,146-173,175-271,273-278,280-282
+run/core/metadata.py
+  s_226f875aff5bc8::t_2d9057b517f6af 1-344
+run/core/fonts.py
+  s_226f875aff5bc8::t_bb8334672c1ada 37,39-44
+  s_226f875aff5bc8::t_b311d96c21dfa6 1-36,38,45-111
+README.md
+  s_226f875aff5bc8::t_da4b09f565a164 48
+  s_226f875aff5bc8::t_f952f8608ee14c 30
+  s_9e378c1efa801b::t_a16d1133e0444d 41,50,54-56,59,64-66,78,80-83,85
+  s_226f875aff5bc8::t_9d2d9c8b1a6d61 20-22
+  s_226f875aff5bc8::t_141634c2382aff 111-112
+  s_226f875aff5bc8::t_a8ef75b78807a0 29
+  s_226f875aff5bc8::t_6503776c918753 53,63,69-75,77,79,84,87,91,94-96,99-110,113-129
+run/core/burnin.py
+  s_226f875aff5bc8::t_3fa5d8006efea7 1-13,16,18-19,25,27-67,72-74,78,94-96,98-103,105-107,109,113-137,139,142,144-197,199-219,221,227,229,234-261,265-272,275-400,404-413
+  s_226f875aff5bc8::t_e5309224240136 17,198
+  s_226f875aff5bc8::t_f59786e3d28905 68-70,75-76,104,108,112
+  s_226f875aff5bc8::t_c32a3ae928f710 14-15,20-24,26,71,77,138,140-141,143,220,222-226,228,230-233,262-264,273-274,401-403
+  s_226f875aff5bc8::t_d395e6d45699f7 79-82,85-93,97,110-111
+  s_226f875aff5bc8::t_71923921f8fbe5 83-84
+run/web/__init__.py
+  s_226f875aff5bc8::t_b2a2d2cafda478 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "718b187e9929ff356572559efc601af92d5e68ab",
+  "prompts": {},
+  "sessions": {
+    "s_226f875aff5bc8": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "5b6ae569-7579-4e0c-8c54-0b0f319762d1",
+        "model": "unknown"
+      },
+      "human_author": "chrhodge <chrhodge@cisco.com>"
+    },
+    "s_9e378c1efa801b": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "859d8a9b-9783-4b9f-b635-6c6e1ddca7ce",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "chrhodge <chrhodge@cisco.com>"
+    }
+  }
+}
