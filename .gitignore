@@ -2,6 +2,7 @@
 archivist/
 archivist/*
 .venv/
+.venv-*/
 venv/
 .venv/*
 venv/*

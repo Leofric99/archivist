@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Archivist</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Archivist"><img src="/static/logo.png" alt="Archivist" width="128" height="42"></a>
+    <form id="root-form" class="root-form" autocomplete="off">
+      <input id="root-input" type="text" placeholder="Folder path, e.g. /Users/me/Pictures/Scans" aria-label="Folder path">
+      <button type="submit" class="primary">Open</button>
+      <button type="button" id="browse-btn">Browse…</button>
+    </form>
+    <label class="inline"><input type="checkbox" id="subdirs" checked> Include subfolders</label>
+    <span class="local-note" title="The server only listens on this computer. Files are read from disk and never uploaded.">🔒 Local only</span>
+  </header>
+
+  <div class="layout">
+    <main>
+      <div class="toolbar">
+        <label class="inline"><input type="checkbox" class="kind-filter" value="image" checked> Photos</label>
+        <label class="inline"><input type="checkbox" class="kind-filter" value="raw" checked> RAW</label>
+        <label class="inline"><input type="checkbox" class="kind-filter" value="video" checked> Videos</label>
+        <input id="search" type="search" placeholder="Filter by name…" aria-label="Filter by name">
+        <span class="spacer"></span>
+        <span id="count" class="muted"></span>
+        <span class="tip muted">Right-click a file for actions</span>
+        <button type="button" id="select-all">Select all shown</button>
+        <button type="button" id="clear-selection">Clear</button>
+      </div>
+      <div id="empty" class="empty"></div>
+      <div id="grid" class="grid" role="listbox" aria-multiselectable="true" aria-label="Files" tabindex="0"></div>
+    </main>
+    <aside id="side" class="side"></aside>
+  </div>
+
+  <div id="ctx-menu" class="ctx-menu" role="menu" hidden></div>
+
+  <dialog id="op-dialog" class="op-dialog"></dialog>
+
+  <dialog id="browse-dialog" class="browse-dialog">
+    <h2>Choose a folder</h2>
+    <div id="browse-path" class="browse-path"></div>
+    <ul id="browse-list" class="browse-list"></ul>
+    <div class="dialog-actions">
+      <button type="button" id="browse-cancel">Cancel</button>
+      <button type="button" id="browse-choose" class="primary">Use this folder</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script src="/static/crop-editor.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

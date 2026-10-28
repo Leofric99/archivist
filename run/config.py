@@ -7,6 +7,9 @@ Configuration options for the run module, including file extensions and EXIF tag
 EVENT_FOLDER_THRESHOLD = 10
 
 FONT = 'Arial.ttf'  # Default font for metadata burning
+# Default font family for the verbose caption band: the first one installed wins. Liberation Mono and
+# Cousine are metric-compatible stand-ins for Courier New on systems that don't ship it.
+CAPTION_FONT_DEFAULTS = ['Courier New', 'Liberation Mono', 'Cousine', 'Courier', 'Nimbus Mono PS', 'DejaVu Sans Mono']
 
 IMAGE_EXTENSIONS = [
     '.jpg', '.jpeg', '.jpe', '.jif', '.jfif', '.jfi',
