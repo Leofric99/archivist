@@ -87,11 +87,12 @@ def _updated_exif(exif_bytes, size: tuple):
 
 
 def plan_crop(ctx: Context, files: list, params: dict, answers: dict) -> Plan:
-    _check_output(params)
+    _check_output(params, ctx)
     default_ratio = parse_ratio(params.get("ratio"))
     crops = params.get("crops") or {}
     plan = Plan(op="crop")
     payload = []
+    destinations = set()
     for src in files:
         if src.suffix.lower() not in BURNIN_IMAGE_EXTS:
             plan.items.append(Item(str(src), None, "crop", "skip", "format not supported for cropping"))
@@ -113,7 +114,10 @@ def plan_crop(ctx: Context, files: list, params: dict, answers: dict) -> Plan:
         new_w, new_h = box[2] - box[0], box[3] - box[1]
         note = f"{size[0]}×{size[1]} → {new_w}×{new_h}"
         item = Item(str(src), str(dst), "crop", "ok", note)
-        if not params.get("overwrite") and src.resolve() == dst.resolve():
+        if dst.resolve() in destinations:
+            item.status = "error"
+            item.note = "another selected file has the same output name"
+        elif not params.get("overwrite") and src.resolve() == dst.resolve():
             item.status = "error"
             item.note = "output would replace the original; tick overwrite or pick another folder"
             plan.errors.append("The output folder is the same as the source folder. Tick 'Overwrite the "
@@ -125,6 +129,7 @@ def plan_crop(ctx: Context, files: list, params: dict, answers: dict) -> Plan:
         plan.items.append(item)
         if item.status == "ok":
             payload.append((src, dst, box))
+        destinations.add(dst.resolve())
     plan.errors = list(dict.fromkeys(plan.errors))
     plan.payload = payload
     plan.summary = f"{len(payload)} of {len(plan.items)} photo(s) will be cropped."

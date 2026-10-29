@@ -26,7 +26,9 @@ function createCropEditor(files, onChange) {
   };
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
   const cur = () => files[idx];
-  const url = (kind, path) => `/api/${kind}?path=${encodeURIComponent(path)}`;
+  const url = (kind, path) => window.archivistAssetUrl
+    ? window.archivistAssetUrl(`/api/${kind}?path=${encodeURIComponent(path)}`)
+    : `/api/${kind}?path=${encodeURIComponent(path)}`;
 
   // ----- ratio controls -----
   const ratioSelect = el('select', { 'aria-label': 'Aspect ratio' },
@@ -212,7 +214,10 @@ function createCropEditor(files, onChange) {
     idx = clamp(i, 0, files.length - 1);
     box.hidden = true;
     shade.hidden = true;
-    img.src = url('preview', cur().path);
+    const selected = cur();
+    Promise.resolve(url('preview', selected.path)).then(src => {
+      if (cur() === selected) img.src = src;
+    });
     render();
     strip.children[idx]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
@@ -232,8 +237,11 @@ function createCropEditor(files, onChange) {
     },
   }, 'Use this crop for all');
 
-  files.forEach((f, i) => strip.append(el('button', { type: 'button', class: 'crop-thumb', title: f.path, onclick: () => show(i) },
-    el('img', { src: url('thumb', f.path), alt: '', loading: 'lazy', draggable: 'false' }))));
+  files.forEach((f, i) => {
+    const image = el('img', { alt: '', loading: 'lazy', draggable: 'false' });
+    strip.append(el('button', { type: 'button', class: 'crop-thumb', title: f.path, onclick: () => show(i) }, image));
+    Promise.resolve(url('thumb', f.path)).then(src => { if (image.isConnected) image.src = src; });
+  });
   if (files.length < 2) { prevBtn.hidden = nextBtn.hidden = copyBtn.hidden = strip.hidden = true; }
 
   const root = el('div', { class: 'crop-editor' },

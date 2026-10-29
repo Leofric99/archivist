@@ -19,7 +19,7 @@
 
 Archivist is a utility for managing photographs and videos. It runs a small web server **on your own computer** and opens a browser GUI where you can browse a folder of media, select files, and apply every tool: standardize filenames using dates, work with image metadata, add visible information to media, and organize files into a consistent folder structure.
 
-Everything stays on your machine. The server only listens on `127.0.0.1`, files are read from disk where they already are (nothing is uploaded), and no external services, fonts or scripts are used. A terminal menu is still available with `--cli`.
+Everything stays on your machine. In browser mode, the server only listens on `127.0.0.1`; the Windows desktop app embeds the GUI and dispatches its API calls directly to the application without starting a network server. Files are read from disk where they already are (nothing is uploaded), and no external services, fonts or scripts are used. A terminal menu is still available with `--cli`.
 
 ## Features
 
@@ -68,9 +68,17 @@ python -m pip install -r requirements.txt
 
 Other Linux distributions need the equivalent Python, venv, Exiv2, inih, and FFmpeg packages. On a headless server, start Archivist with `--no-browser` and forward the port over SSH (`ssh -L 8765:127.0.0.1:8765 host`, with `--port 8765`).
 
-### Windows
+### Windows desktop installer
 
-While running on Windows should be possible, using WSL is recommended. Follow the Linux setup inside WSL and open the printed URL in your Windows browser.
+On a 64-bit Windows machine with Python 3.11 and PowerShell, build the desktop installer from the repository root:
+
+```powershell
+.\.dev\build-windows.ps1
+```
+
+The script installs the build dependencies into `.dev\build\venv`, packages the embedded GUI, and creates `.dev\dist\Archivist-Setup.exe`. It uses Inno Setup 6 (installed via `winget` if needed) and downloads Microsoft's WebView2 bootstrapper; an internet connection is required during the build and when installing WebView2 if it is not already present. Run the generated installer, then launch Archivist from the Start menu or desktop shortcut. Running a newer installer updates the existing Archivist installation in place. The desktop app does not open a localhost port or launch a browser: GUI API calls are sent through the native WebView bridge to the application running in the same process.
+
+To run from source on Windows instead, use WSL and follow the Linux setup below.
 
 > If you encounter issues importing photo metadata, ensure both `exiv2` and `inih` are installed and available on your system. Video features also require `ffmpeg` and `ffprobe` on your system path.
 
@@ -114,9 +122,13 @@ Archivist prints a URL (it contains a one-time token) and opens it in your brows
 
 Burn-in actions write to an output folder by default; overwriting the originals is an explicit option. Burn-in forms include a live preview and optional per-photo captions.
 
+### Using the Windows desktop app
+
+Drop one or more photos onto the Archivist window to work with files from different folders without scanning those folders. The app keeps each selected file associated with its current on-disk path, including after an in-app rename. Burn-in and crop results default to a new `*_archivist` copy beside each dropped original; choose **Browse…** on the output-folder field to save the copies elsewhere.
+
 ### Safety and privacy
 
-- The server binds to `127.0.0.1` only, requires a random per-run token (stored in a strict same-site cookie), and rejects unexpected `Host` and `Origin` headers.
+- Browser mode binds to `127.0.0.1` only, requires a random per-run token (stored in a strict same-site cookie), and rejects unexpected `Host` and `Origin` headers. The Windows desktop app starts no network listener; its embedded GUI communicates with the application through an in-process bridge.
 - Files are read in place. The browser can only request files inside the folder you opened; paths that escape it (including through symlinks) are refused.
 - Output, destination and metadata-file paths are paths on this computer that you type or browse to; they are never uploaded anywhere.
 - Renames never overwrite an existing file: collisions are flagged in the preview and skipped.

@@ -4,7 +4,7 @@ const $ = (sel, el = document) => el.querySelector(sel);
 
 const state = {
   pendingRename: null,
-  root: null, home: '', ops: [], tools: {},
+  root: null, collection: false, home: '', ops: [], tools: {},
   files: [], shown: [], selected: new Set(), anchor: null, cards: new Map(), infoToken: 0,
 };
 
@@ -12,6 +12,18 @@ const GROUP_TITLES = { photos: 'Photographs', videos: 'Videos', metadata: 'Metad
 const KIND_ICON = { image: '🖼️', raw: '📷', video: '🎞️' };
 const MAX_PLAN_ROWS = 300;
 const MAX_CAPTION_ROWS = 200;
+const isDesktop = document.documentElement.dataset.desktop === 'true' || window.location.protocol === 'file:';
+const desktopReady = new Promise(resolve => {
+  if (window.pywebview?.api) resolve();
+  else window.addEventListener('pywebviewready', resolve, { once: true });
+});
+if (isDesktop) {
+  $('.brand').addEventListener('click', event => event.preventDefault());
+  $('#root-form').hidden = true;
+  $('#subdirs-label').hidden = true;
+  $('#desktop-drop-note').hidden = false;
+  $('#drop-zone').hidden = false;
+}
 
 // ---------- helpers ----------
 
@@ -33,11 +45,24 @@ function h(tag, attrs = {}, ...kids) {
 }
 
 async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch('/api' + path, {
-    method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  if (isDesktop) {
+    await desktopReady;
+    if (!window.pywebview?.api) throw new Error('The Archivist desktop bridge is unavailable.');
+    const result = await window.pywebview.api.request(method, '/api' + path, body === undefined ? null : body);
+    const binary = atob(result.body);
+    const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+    res = new Response(bytes.length ? bytes : null, {
+      status: result.status,
+      headers: { 'Content-Type': result.content_type },
+    });
+  } else {
+    res = await fetch('/api' + path, {
+      method,
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
   if (!res.ok) {
     let msg = res.statusText;
     try {
@@ -50,6 +75,59 @@ async function api(path, { method = 'GET', body } = {}) {
 }
 const getJson = async (path, opts) => (await api(path, opts)).json();
 const enc = encodeURIComponent;
+
+async function assetUrl(path) {
+  if (!isDesktop) return path;
+  const res = await api(path.replace(/^\/api/, ''));
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not load preview.'));
+    reader.readAsDataURL(blob);
+  });
+}
+window.archivistAssetUrl = assetUrl;
+
+async function setImageSource(image, path) {
+  try {
+    const source = await assetUrl(path);
+    if (image.isConnected) image.src = source;
+  } catch (err) {
+    console.warn('Could not load media preview:', err);
+  }
+}
+
+async function mediaUrl(path) {
+  if (!isDesktop) return `/api/file?path=${enc(path)}`;
+  await desktopReady;
+  if (!window.pywebview?.api) throw new Error('The Archivist desktop bridge is unavailable.');
+  return window.pywebview.api.media_url(path);
+}
+
+function createDesktopJobStream(jobId, onMessage, onError) {
+  let closed = false, timer;
+  let since = 0;
+  const stream = {
+    close() {
+      closed = true;
+      clearTimeout(timer);
+    },
+  };
+  async function poll() {
+    try {
+      const snapshot = await getJson(`/jobs/${jobId}?since=${since}`);
+      since = snapshot.next;
+      onMessage(snapshot);
+      if (!closed && snapshot.status === 'running') timer = setTimeout(poll, 400);
+    } catch (err) {
+      stream.close();
+      onError(err);
+    }
+  }
+  poll();
+  return stream;
+}
 
 let toastTimer;
 function toast(message, kind = 'error') {
@@ -72,8 +150,9 @@ async function loadState() {
   state.home = s.home;
   state.tools = s.tools;
   state.root = s.root;
+  state.collection = !!s.collection;
   $('#root-input').value = s.root || '';
-  if (s.root) await loadFiles();
+  if (s.root || state.collection) await loadFiles();
   else renderAll();
 }
 
@@ -81,6 +160,9 @@ async function openRoot(path) {
   try {
     const res = await getJson('/root', { method: 'POST', body: { path } });
     state.root = res.root;
+    state.collection = false;
+    const current = await getJson('/state');
+    state.ops = current.ops;
     $('#root-input').value = res.root;
     state.selected.clear();
     await loadFiles();
@@ -91,6 +173,8 @@ async function loadFiles() {
   try {
     const data = await getJson(`/files?subdirs=${$('#subdirs').checked}`);
     state.files = data.files;
+    state.collection = !!data.collection;
+    state.root = data.root;
     const existing = new Set(data.files.map(f => f.path));
     state.selected = new Set([...state.selected].filter(p => existing.has(p)));
     if (data.truncated) toast('Folder is very large; only the first files are shown.', 'info');
@@ -98,12 +182,34 @@ async function loadFiles() {
   } catch (err) { toast(err.message); }
 }
 
+window.archivistFilesDropped = async result => {
+  if (!result.added && !result.skipped) return;
+  if (!result.added) {
+    toast(`No photos were added; skipped ${result.skipped} unsupported or duplicate item${result.skipped === 1 ? '' : 's'}.`, 'info');
+    return;
+  }
+  try {
+    const s = await getJson('/state');
+    state.root = s.root;
+    state.collection = !!s.collection;
+    state.ops = s.ops;
+    state.tools = s.tools;
+    $('#root-input').value = s.root || '';
+    state.selected.clear();
+    await loadFiles();
+    toast(`Added ${result.added} photo${result.added === 1 ? '' : 's'}${result.skipped ? `; skipped ${result.skipped}` : ''}.`, 'info');
+  } catch (err) { toast(err.message); }
+};
+
+window.archivistDropFailed = message => toast(message);
+
 function renderAll() { applyFilters(); renderSide(); }
 
 function applyFilters() {
   const kinds = new Set([...document.querySelectorAll('.kind-filter:checked')].map(i => i.value));
   const q = $('#search').value.trim().toLowerCase();
-  state.shown = state.files.filter(f => kinds.has(f.kind) && (!q || f.path.toLowerCase().includes(q)));
+  state.shown = state.files.filter(f => kinds.has(f.kind)
+    && (!q || `${f.name} ${f.location || f.path}`.toLowerCase().includes(q)));
   renderGrid();
 }
 
@@ -116,7 +222,7 @@ function renderGrid() {
     const thumb = h('div', { class: 'thumb' }, KIND_ICON[f.kind] || '📄');
     const card = h('div', {
       class: 'card' + (state.selected.has(f.path) ? ' selected' : ''), role: 'option',
-      'aria-selected': state.selected.has(f.path), dataset: { path: f.path }, title: f.path,
+      'aria-selected': state.selected.has(f.path), dataset: { path: f.path }, title: f.location || f.path,
     }, h('span', { class: 'badge' }, f.kind), thumb, h('div', { class: 'name' }, f.name));
     frag.append(card);
     state.cards.set(f.path, card);
@@ -124,11 +230,15 @@ function renderGrid() {
   }
   grid.append(frag);
   const empty = $('#empty');
-  if (!state.root) empty.textContent = 'Enter a folder path above (or use Browse…) to see its photos and videos.';
+  if (!state.root && !state.collection) empty.textContent = isDesktop
+    ? 'Drop one or more photos into the Archivist window to get started.'
+    : 'Enter a folder path above (or use Browse…) to see its photos and videos.';
+  else if (state.collection && !state.files.length) empty.textContent = 'Drop photos here to add them to your selection.';
+  else if (state.collection && !state.shown.length) empty.textContent = 'No files match the current filters.';
   else if (!state.files.length) empty.textContent = 'No supported photos or videos found in this folder.';
   else if (!state.shown.length) empty.textContent = 'No files match the current filters.';
   else empty.textContent = '';
-  $('#count').textContent = state.root ? `${state.shown.length} shown · ${state.selected.size} selected` : '';
+  $('#count').textContent = state.root || state.collection ? `${state.shown.length} shown · ${state.selected.size} selected` : '';
 }
 
 // Defer thumbnail requests until a card is near the viewport.
@@ -139,8 +249,9 @@ const observer = new IntersectionObserver(entries => {
     const f = state.files.find(x => x.path === entry.target.dataset.path);
     if (!f) continue;
     const thumb = entry.target.querySelector('.thumb');
-    const img = h('img', { alt: '', src: `/api/thumb?path=${enc(f.path)}` });
-    img.addEventListener('load', () => thumb.replaceChildren(img), { once: true });
+    const img = h('img', { alt: '' });
+    thumb.replaceChildren(img);
+    setImageSource(img, `/api/thumb?path=${enc(f.path)}`);
   }
 }, { rootMargin: '400px' });
 
@@ -182,18 +293,23 @@ function onGridClick(e) {
 function renderSide() {
   const side = $('#side');
   const sel = selectedFiles();
-  $('.layout').classList.toggle('no-side', !state.root || sel.length === 0);
+  $('.layout').classList.toggle('no-side', (!state.root && !state.collection) || sel.length === 0);
   side.replaceChildren();
-  if (!state.root || !sel.length) return;
+  if ((!state.root && !state.collection) || !sel.length) return;
   const close = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close preview', title: 'Close', onclick: () => { state.selected.clear(); syncSelection(); } }, '✕');
   side.append(h('div', { class: 'side-head' }, h('h2', {}, sel.length === 1 ? 'Preview' : `${sel.length} selected`), close));
   if (sel.length === 1) {
     const f = sel[0];
     const media = f.kind === 'video'
-      ? h('video', { class: 'preview', controls: true, preload: 'metadata', src: `/api/file?path=${enc(f.path)}` })
-      : h('img', { class: 'preview', alt: '', src: `/api/preview?path=${enc(f.path)}` });
+      ? h('video', { class: 'preview', controls: true, preload: 'metadata' })
+      : h('img', { class: 'preview', alt: '' });
     media.addEventListener('error', () => media.remove());
-    side.append(media, filenameEditor(f), h('div', { class: 'muted file-path' }, `${f.path} · ${formatBytes(f.size)}`));
+    if (f.kind === 'video') {
+      mediaUrl(f.path).then(src => { if (media.isConnected) media.src = src; }).catch(err => toast(err.message));
+    } else {
+      setImageSource(media, `/api/preview?path=${enc(f.path)}`);
+    }
+    side.append(media, filenameEditor(f), h('div', { class: 'muted file-path' }, `${f.location || f.path} · ${formatBytes(f.size)}`));
     const meta = h('div', { class: 'meta' });
     side.append(h('h3', {}, 'Details'), meta);
     loadInfo(f, meta);
@@ -330,7 +446,7 @@ function fileMenuItems(sel) {
     items.push({ heading: GROUP_TITLES[group] }, ...ops.map(op => opItem(op, sel)));
   }
   if (!any) items.push({ label: 'No actions for this selection', disabled: true });
-  items.push({ separator: true }, ...folderItems());
+  if (state.root) items.push({ separator: true }, ...folderItems());
   return items;
 }
 
@@ -338,12 +454,12 @@ function emptyMenuItems() {
   return [
     { label: 'Select all shown', run: () => { state.shown.forEach(f => state.selected.add(f.path)); syncSelection(); } },
     { label: 'Refresh', run: () => loadFiles() },
-    { separator: true }, ...folderItems(),
+    ...(state.root ? [{ separator: true }, ...folderItems()] : []),
   ];
 }
 
 function onGridContextMenu(e) {
-  if (!state.root) return;
+  if (!state.root && !state.collection) return;
   e.preventDefault();
   const card = e.target.closest('.card');
   const fromKeyboard = e.button === 0 && e.clientX === 0 && e.clientY === 0;
@@ -504,11 +620,13 @@ function openOp(op) {
       const input = h('input', { type: 'text', placeholder: 'Caption', 'aria-label': 'Caption for ' + f.name });
       input.addEventListener('input', invalidate);
       ctx.captionInputs[f.path] = input;
+      const img = h('img', { alt: '', loading: 'lazy' });
       box.append(h('div', { class: 'caption-row' },
-        h('img', { src: f.kind === 'video' ? '' : `/api/thumb?path=${enc(f.path)}`, alt: '', loading: 'lazy' }),
+        img,
         input,
         op.previewable && h('button', { type: 'button', onclick: () => previewFile(f, input.value) }, 'Preview'),
         h('div', { class: 'fname' }, f.path)));
+      if (f.kind !== 'video') setImageSource(img, `/api/thumb?path=${enc(f.path)}`);
     }
     if (files.length > MAX_CAPTION_ROWS) box.append(h('p', { class: 'muted' }, `Captions can be entered for the first ${MAX_CAPTION_ROWS} files only.`));
     fields.append(box);
@@ -584,9 +702,7 @@ function openOp(op) {
     const status = h('div', { class: 'muted' }, 'Starting…');
     const log = h('div', { class: 'log' });
     jobArea.replaceChildren(h('h3', {}, 'Progress'), h('div', { class: 'progress' }, bar), status, log);
-    const es = new EventSource(`/api/jobs/${ctx.jobId}/events`);
-    es.onmessage = ev => {
-      const s = JSON.parse(ev.data);
+    const handleSnapshot = s => {
       const first = s.next - s.logs.length;
       s.logs.forEach((entry, i) => {
         if (first + i < ctx.logCount) return;
@@ -603,6 +719,10 @@ function openOp(op) {
         finishJob(s, jobArea);
       }
     };
+    const es = isDesktop
+      ? createDesktopJobStream(ctx.jobId, handleSnapshot, err => toast(err.message))
+      : new EventSource(`/api/jobs/${ctx.jobId}/events`);
+    if (!isDesktop) es.onmessage = ev => handleSnapshot(JSON.parse(ev.data));
   }
 
   async function finishJob(s) {

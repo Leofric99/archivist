@@ -3,20 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; img-src 'self' data: blob: file:; media-src 'self' file:; style-src 'self' 'unsafe-inline' file:; script-src 'self' file:; connect-src 'self' file:; frame-ancestors 'none'; base-uri 'self' file:; form-action 'none'">
   <title>Archivist</title>
-  <link rel="icon" type="image/png" href="/static/favicon.png">
-  <link rel="stylesheet" href="/static/style.css">
+  <base href="/static/">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="Archivist"><img src="/static/logo.png" alt="Archivist" width="128" height="42"></a>
+    <a class="brand" href="/" aria-label="Archivist"><img src="logo.png" alt="Archivist" width="128" height="42"></a>
     <form id="root-form" class="root-form" autocomplete="off">
       <input id="root-input" type="text" placeholder="Folder path, e.g. /Users/me/Pictures/Scans" aria-label="Folder path">
       <button type="submit" class="primary">Open</button>
       <button type="button" id="browse-btn">Browse…</button>
     </form>
-    <label class="inline"><input type="checkbox" id="subdirs" checked> Include subfolders</label>
-    <span class="local-note" title="The server only listens on this computer. Files are read from disk and never uploaded.">🔒 Local only</span>
+    <label id="subdirs-label" class="inline"><input type="checkbox" id="subdirs" checked> Include subfolders</label>
+    <span id="desktop-drop-note" class="desktop-drop-note" hidden>Drop photos here to begin</span>
+    <span class="local-note" title="Archivist runs locally. Files are read from disk and never uploaded.">🔒 Local only</span>
   </header>
 
   <div class="layout">
@@ -32,6 +35,7 @@
         <button type="button" id="select-all">Select all shown</button>
         <button type="button" id="clear-selection">Clear</button>
       </div>
+      <div id="drop-zone" class="drop-zone" hidden>Drop one or more photos here to add them to Archivist.</div>
       <div id="empty" class="empty"></div>
       <div id="grid" class="grid" role="listbox" aria-multiselectable="true" aria-label="Files" tabindex="0"></div>
     </main>
@@ -53,7 +57,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="/static/crop-editor.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="crop-editor.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

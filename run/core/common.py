@@ -100,23 +100,41 @@ def iter_media(root: Path, subdirs: bool = True, kinds: Optional[set] = None) ->
 
 @dataclass
 class Context:
-    """Per-session state: the folder currently opened by the user."""
+    """Per-session state for either an opened folder or a tracked file selection."""
     root: Path
+    tracked_files: Optional[dict[str, Path]] = None
 
     def rel(self, path: Path) -> str:
+        resolved = Path(path).resolve()
+        if self.tracked_files is not None:
+            for key, tracked in self.tracked_files.items():
+                if tracked.resolve() == resolved:
+                    return key
+            return str(path)
         try:
-            return Path(path).resolve().relative_to(self.root.resolve()).as_posix()
+            return resolved.relative_to(self.root.resolve()).as_posix()
         except ValueError:
             return str(path)
 
     def resolve_inside(self, rel: str) -> Path:
-        """Resolve a root-relative path, refusing anything that escapes the root."""
+        """Resolve a file identifier, refusing paths outside the active context."""
+        if self.tracked_files is not None:
+            if not isinstance(rel, str) or not rel or "\x00" in rel:
+                raise OperationError("Invalid path.")
+            path = self.tracked_files.get(rel)
+            if path is None:
+                raise OperationError("File is not in the current selection.")
+            return path
         if not isinstance(rel, str) or not rel or "\x00" in rel:
             raise OperationError("Invalid path.")
         candidate = (self.root / rel).resolve()
         if not is_within(candidate, self.root):
             raise OperationError("Path is outside the opened folder.")
         return candidate
+
+    def update_tracked_file(self, key: str, path: Path) -> None:
+        if self.tracked_files is not None and key in self.tracked_files:
+            self.tracked_files[key] = path.resolve()
 
 
 @dataclass

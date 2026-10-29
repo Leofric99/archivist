@@ -203,7 +203,8 @@ def test_logo_and_favicon_are_served_and_referenced(root):
             assert res.status_code == 200 and res.headers["content-type"] == "image/png"
         assert c.get("/static/crop-editor.js").status_code == 200
         c.cookies.set("archivist_token", TOKEN)
-        assert "/static/logo.png" in c.get("/").text
+        assert '<base href="/static/">' in c.get("/").text
+        assert 'src="logo.png"' in c.get("/").text
 
 
 # ---- sidebar rename ----

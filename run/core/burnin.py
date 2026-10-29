@@ -146,20 +146,25 @@ def _output_params() -> list:
         Param("overwrite", "Overwrite the original files", "bool", default=False,
               help="Off by default. When off, results are written to the output folder and originals are untouched."),
         Param("output_dir", "Output folder", "path", show_if={"overwrite": False},
-              help="Created if missing. Sub-folder structure is preserved."),
+              help="Created if missing. For dropped photos, leave blank to save a new copy beside each original."),
     ]
 
 
 def _destination(ctx: Context, src: Path, params: dict) -> Path:
     if params.get("overwrite"):
         return src
+    if ctx.tracked_files is not None:
+        if not (params.get("output_dir") or "").strip():
+            return src.with_name(f"{src.stem}_archivist{src.suffix}")
+        return to_path(params["output_dir"]) / src.name
     out_dir = to_path(params.get("output_dir", ""))
     rel = Path(ctx.rel(src))
     return out_dir / (rel if not rel.is_absolute() else Path(src.name))
 
 
-def _check_output(params: dict) -> None:
-    if not params.get("overwrite") and not (params.get("output_dir") or "").strip():
+def _check_output(params: dict, ctx: Optional[Context] = None) -> None:
+    if not params.get("overwrite") and not (params.get("output_dir") or "").strip() \
+            and not (ctx and ctx.tracked_files is not None):
         raise OperationError("Choose an output folder, or tick 'Overwrite the original files'.")
 
 
@@ -173,7 +178,7 @@ def _text_for(ctx: Context, src: Path, params: dict, required_caption: bool) -> 
 
 def _plan_burnin(ctx: Context, files: list, params: dict, op: str, media_kind: str,
                  required_caption: bool = False) -> Plan:
-    _check_output(params)
+    _check_output(params, ctx)
     custom_date = (params.get("custom_date") or "").strip()
     if custom_date:
         try:
@@ -182,6 +187,7 @@ def _plan_burnin(ctx: Context, files: list, params: dict, op: str, media_kind: s
             raise OperationError(str(exc))
     plan = Plan(op=op)
     payload = []
+    destinations = set()
     for src in files:
         if media_kind == "image" and src.suffix.lower() not in BURNIN_IMAGE_EXTS:
             plan.items.append(Item(str(src), None, "burn-in", "skip", "format not supported for burn-in"))
@@ -195,19 +201,25 @@ def _plan_burnin(ctx: Context, files: list, params: dict, op: str, media_kind: s
             continue
         dst = _destination(ctx, src, params)
         item = Item(str(src), str(dst), "burn-in", "ok")
-        if not params.get("overwrite") and src.resolve() == dst.resolve():
+        if dst.resolve() in destinations:
+            item.status, item.note = "error", "another selected file has the same output name"
+        elif not params.get("overwrite") and src.resolve() == dst.resolve():
             item.status, item.note = "error", "output would replace the original; tick overwrite or pick another folder"
         elif params.get("overwrite"):
             item.note = "original will be replaced"
         elif dst.exists():
             item.note = "replaces an existing file in the output folder"
+        destinations.add(dst.resolve())
         plan.items.append(item)
         if item.status == "ok":
             payload.append((src, dst, text, custom_date))
     n_err = sum(1 for i in plan.items if i.status == "error")
     if n_err:
-        plan.errors.append("The output folder is the same as the source folder. Tick 'Overwrite the original "
-                           "files' or choose a different output folder.")
+        if any("same output name" in item.note for item in plan.items):
+            plan.errors.append("Multiple selected files would use the same output name. Choose a different output folder.")
+        else:
+            plan.errors.append("The output folder is the same as the source folder. Tick 'Overwrite the original "
+                               "files' or choose a different output folder.")
     plan.payload = payload
     plan.summary = f"{len(payload)} of {len(plan.items)} file(s) will be processed."
     if params.get("overwrite") and payload:

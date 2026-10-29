@@ -37,7 +37,7 @@ THUMB_SIZE = 320
 PREVIEW_SIZE = 1600
 
 CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; "
-       "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+       "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'")
 
 
 class RootBody(BaseModel):
@@ -77,6 +77,16 @@ class AppState:
         if not self.ctx:
             raise HTTPException(400, "Open a folder first.")
         return self.ctx
+
+    def file_from(self, rel: str) -> Path:
+        ctx = self.require_ctx()
+        try:
+            path = ctx.resolve_inside(rel)
+        except OperationError as exc:
+            raise HTTPException(400, str(exc))
+        if not path.is_file():
+            raise HTTPException(404, "File not found.")
+        return path
 
     def store_plan(self, plan: Plan, op_id: str, ctx: Context) -> str:
         now = time.time()
@@ -147,22 +157,15 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
 
     api = APIRouter(prefix="/api", dependencies=[Depends(authenticate)])
 
-    def file_from(rel: str) -> Path:
-        ctx = state.require_ctx()
-        try:
-            path = ctx.resolve_inside(rel)
-        except OperationError as exc:
-            raise HTTPException(400, str(exc))
-        if not path.is_file():
-            raise HTTPException(404, "File not found.")
-        return path
-
     @api.get("/state")
     def get_state() -> dict:
+        ctx = state.ctx
+        collection = bool(ctx and ctx.tracked_files is not None)
         return {
-            "root": str(state.ctx.root) if state.ctx else None,
+            "root": str(ctx.root) if ctx and not collection else None,
+            "collection": collection,
             "home": str(Path.home()),
-            "ops": [op.to_dict() for op in ops.OPERATIONS],
+            "ops": [op.to_dict() for op in ops.OPERATIONS if not collection or op.scope == "files"],
             "tools": {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe"))},
         }
 
@@ -198,7 +201,9 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
     def list_files(subdirs: bool = True) -> dict:
         ctx = state.require_ctx()
         files, truncated = [], False
-        for p in iter_media(ctx.root, subdirs=subdirs):
+        source_files = (ctx.tracked_files.values() if ctx.tracked_files is not None
+                        else iter_media(ctx.root, subdirs=subdirs))
+        for p in source_files:
             if len(files) >= MAX_FILES:
                 truncated = True
                 break
@@ -206,15 +211,20 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
                 st = p.stat()
             except OSError:
                 continue
-            files.append({"path": ctx.rel(p), "name": p.name, "kind": kind_of(p),
-                          "size": st.st_size, "mtime": st.st_mtime})
-        return {"root": str(ctx.root), "files": files, "truncated": truncated}
+            entry = {"path": ctx.rel(p), "name": p.name, "kind": kind_of(p),
+                     "size": st.st_size, "mtime": st.st_mtime}
+            if ctx.tracked_files is not None:
+                entry["location"] = str(p)
+            files.append(entry)
+        return {"root": str(ctx.root) if ctx.tracked_files is None else None,
+                "collection": ctx.tracked_files is not None, "files": files, "truncated": truncated}
 
     @api.post("/rename")
     def rename_one(body: RenameBody) -> dict:
         ctx = state.require_ctx()
-        src = file_from(body.path)
-        if (ctx.root / body.path).is_symlink():
+        src = state.file_from(body.path)
+        source_entry = (ctx.root / body.path) if ctx.tracked_files is None else src
+        if source_entry.is_symlink():
             raise HTTPException(400, "Symbolic links cannot be renamed here.")
         if state.jobs.busy():
             raise HTTPException(409, "Another operation is still running.")
@@ -222,30 +232,31 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
             target = rename_file(src, body.name)
         except OperationError as exc:
             raise HTTPException(400, str(exc))
+        ctx.update_tracked_file(body.path, target)
         state.plans.clear()  # earlier plans refer to the old name
         return {"path": ctx.rel(target), "name": target.name}
 
     @api.get("/info")
     def info(path: str) -> dict:
-        return metadata_core.read_info(file_from(path))
+        return metadata_core.read_info(state.file_from(path))
 
     @api.get("/thumb")
     def thumb(path: str, size: int = THUMB_SIZE) -> Response:
-        data = state.thumbs.get(file_from(path), max(32, min(size, 640)))
+        data = state.thumbs.get(state.file_from(path), max(32, min(size, 640)))
         if not data:
             return Response(status_code=204)
         return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
 
     @api.get("/preview")
     def preview(path: str) -> Response:
-        data = state.thumbs.get(file_from(path), PREVIEW_SIZE, quality=88)
+        data = state.thumbs.get(state.file_from(path), PREVIEW_SIZE, quality=88)
         if not data:
             return Response(status_code=204)
         return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
 
     @api.get("/file")
     def raw_file(path: str) -> FileResponse:
-        p = file_from(path)
+        p = state.file_from(path)
         if kind_of(p) != "video":
             raise HTTPException(400, "Only videos can be streamed.")
         return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "application/octet-stream")
@@ -267,7 +278,7 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
                 raise HTTPException(400, "Select at least one file.")
             seen = set()
             for rel in body.paths:
-                path = file_from(rel)
+                path = state.file_from(rel)
                 if path in seen:
                     continue
                 seen.add(path)
@@ -283,7 +294,9 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
             raise HTTPException(500, "Planning failed unexpectedly; see the terminal for details.")
         plan.items.extend(Item(str(p), None, "", "skip", "not supported by this action") for p in rejected)
         for item in plan.items:
-            item.source = ctx.rel(Path(item.source)) if Path(item.source).is_absolute() else item.source
+            if Path(item.source).is_absolute():
+                source_path = Path(item.source)
+                item.source = str(source_path) if ctx.tracked_files is not None else ctx.rel(source_path)
             if item.target and Path(item.target).is_absolute():
                 item.target = ctx.rel(Path(item.target))
         result = plan.to_dict()
@@ -297,7 +310,7 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
             raise HTTPException(400, "This action has no preview.")
         ctx = state.require_ctx()
         try:
-            image = op.preview(ctx, file_from(body.path), dict(body.params), body.caption)
+            image = op.preview(ctx, state.file_from(body.path), dict(body.params), body.caption)
         except Exception as exc:
             raise HTTPException(400, f"Preview failed: {exc}")
         buf = io.BytesIO()
