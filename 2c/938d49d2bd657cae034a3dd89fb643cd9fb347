@@ -1,0 +1,27 @@
+run/desktop.py
+  s_18f4f2fc113665::t_b591a026f809e9 143-148
+  s_18f4f2fc113665::t_217a983ca7ea9f 6,88-90,92,106,152-160,164,182
+.dev/build-macos.sh
+  s_18f4f2fc113665::t_8006e59f83a3f9 1-99
+tests/test_desktop.py
+  s_18f4f2fc113665::t_217a983ca7ea9f 8,89-90,120,124
+  s_18f4f2fc113665::t_142b2748582a8b 146-152
+README.md
+  s_18f4f2fc113665::t_d09554974feaac 59-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2c938d49d2bd657cae034a3dd89fb643cd9fb347",
+  "prompts": {},
+  "sessions": {
+    "s_18f4f2fc113665": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "1f40191f-9f59-4f1e-a810-d7c24610e506",
+        "model": "copilot/claude-sonnet-5.5"
+      },
+      "human_author": "chrhodge <chrhodge@cisco.com>"
+    }
+  }
+}
