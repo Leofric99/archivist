@@ -56,6 +56,16 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
+#### macOS desktop app
+
+To build a native macOS app and installer from the repository root (requires `brew install python@3.11`):
+
+```sh
+.dev/build-macos.sh
+```
+
+The script installs the build dependencies into `.dev/build/venv-macos`, packages the embedded GUI as `.dev/dist/Archivist.app`, and creates `.dev/dist/Archivist-Setup.dmg`. Open the disk image and drag Archivist into Applications; installing a newer version over the old one updates it in place. The app is built for the architecture of the Mac that builds it and is ad-hoc signed; set `CODESIGN_IDENTITY="Developer ID Application: ..."` to sign it with your own identity. On first launch of an ad-hoc signed app, right-click it and choose **Open**. Like the Windows app, it starts no network listener and works through an in-process bridge, and you can drop photos onto its window. Video features still need `ffmpeg` (the app also looks in `/opt/homebrew/bin` and `/usr/local/bin`).
+
 ### Linux (Debian / Ubuntu)
 
 ```sh

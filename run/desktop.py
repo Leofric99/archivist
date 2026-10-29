@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -84,10 +85,11 @@ class DesktopBridge:
         self._client.__exit__(None, None, None)
 
 
-def _enable_windows_file_drop(window, bridge: DesktopBridge) -> None:
-    """Route WebView2 file-drop paths from the document drop event into the desktop bridge."""
-    if sys.platform != "win32":
+def _enable_file_drop(window, bridge: DesktopBridge) -> None:
+    """Route native file-drop paths (WebView2 / WKWebView) from the document drop event into the desktop bridge."""
+    if sys.platform not in ("win32", "darwin"):
         return
+    file_manager = "Finder" if sys.platform == "darwin" else "File Explorer"
 
     from webview.dom import DOMEventHandler
 
@@ -101,7 +103,7 @@ def _enable_windows_file_drop(window, bridge: DesktopBridge) -> None:
         ]
         if not paths:
             window.evaluate_js(
-                "window.archivistDropFailed('Archivist could not read the dropped file paths. Drop photos from File Explorer.')"
+                f"window.archivistDropFailed('Archivist could not read the dropped file paths. Drop photos from {file_manager}.')"
             )
             return
         result = bridge.add_files(paths)
@@ -138,12 +140,28 @@ def _desktop_html(static_dir: Path) -> str:
     if base_tag not in html or '<html lang="en">' not in html:
         raise RuntimeError("The desktop GUI HTML is missing its expected asset base or root element.")
     html = html.replace(base_tag, f'<base href="{static_dir.resolve().as_uri()}/">', 1)
+    if sys.platform == "darwin":
+        # WKWebView applies the page CSP to pywebview's eval()-based evaluate_js; WebView2 does not.
+        script_src = "script-src 'self' file:"
+        if script_src not in html:
+            raise RuntimeError("The desktop GUI HTML is missing its expected script policy.")
+        html = html.replace(script_src, script_src + " 'unsafe-eval'", 1)
     return html.replace('<html lang="en">', '<html lang="en" data-desktop="true">', 1)
+
+
+def _extend_macos_path() -> None:
+    # Apps launched from Finder get a minimal PATH that omits Homebrew, where ffmpeg usually lives.
+    if sys.platform != "darwin":
+        return
+    parts = os.environ.get("PATH", "").split(os.pathsep)
+    extra = [p for p in ("/opt/homebrew/bin", "/usr/local/bin") if p not in parts]
+    os.environ["PATH"] = os.pathsep.join(parts + extra)
 
 
 def main() -> None:
     import webview
 
+    _extend_macos_path()
     bridge = DesktopBridge()
     try:
         static_dir = _resource_path("run/web/static")
@@ -161,7 +179,7 @@ def main() -> None:
                 height=820,
                 min_size=(900, 600),
             )
-            _enable_windows_file_drop(window, bridge)
+            _enable_file_drop(window, bridge)
             webview.start()
     finally:
         bridge._close()

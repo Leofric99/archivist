@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from run.desktop import DesktopBridge, _desktop_html, _enable_windows_file_drop, _resource_path
+from run.desktop import DesktopBridge, _desktop_html, _enable_file_drop, _resource_path
 from tests.conftest import make_jpeg
 
 
@@ -86,7 +86,8 @@ def test_dropped_images_keep_identity_after_rename_and_support_save_destinations
         bridge._close()
 
 
-def test_webview_drop_event_uses_native_full_file_paths(monkeypatch, tmp_path):
+@pytest.mark.parametrize("platform", ["win32", "darwin"])
+def test_webview_drop_event_uses_native_full_file_paths(monkeypatch, tmp_path, platform):
     from webview.dom import DOMEventHandler
 
     photo = make_jpeg(tmp_path / "drop.jpg")
@@ -116,11 +117,11 @@ def test_webview_drop_event_uses_native_full_file_paths(monkeypatch, tmp_path):
         def evaluate_js(self, script):
             self.scripts.append(script)
 
-    monkeypatch.setattr("run.desktop.sys.platform", "win32")
+    monkeypatch.setattr("run.desktop.sys.platform", platform)
     window = Window()
     bridge = DesktopBridge()
     try:
-        _enable_windows_file_drop(window, bridge)
+        _enable_file_drop(window, bridge)
         window.events.loaded.callback()
         assert window.drop_target.name == "drop"
         assert isinstance(window.drop_target.handler, DOMEventHandler)
@@ -142,3 +143,10 @@ def test_desktop_html_uses_local_assets_and_marks_native_bridge():
     assert '<html lang="en" data-desktop="true">' in html
     assert 'href="style.css"' in html
     assert 'src="app.js"' in html
+
+
+@pytest.mark.parametrize("platform, allows_eval", [("darwin", True), ("win32", False)])
+def test_desktop_html_allows_eval_only_on_macos(monkeypatch, platform, allows_eval):
+    monkeypatch.setattr("run.desktop.sys.platform", platform)
+    html = _desktop_html(_resource_path("run/web/static"))
+    assert ("'unsafe-eval'" in html) is allows_eval
