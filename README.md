@@ -56,15 +56,15 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-#### macOS desktop app
+#### Apple Silicon Mac app
 
-To build a native macOS app and installer from the repository root (requires `brew install python@3.11`):
+For an Apple Silicon Mac, get the latest release from the [Releases tab](https://github.com/Leofric99/archivist/releases). Under the latest release, download `Archivist-AppleSilicon-1.0.0.zip`, then:
 
-```sh
-.dev/build-macos.sh
-```
+1. Unzip the downloaded file.
+2. Put `Archivist.app` anywhere you like and open it.
+3. The app is ad-hoc signed, so on first launch right-click it and choose **Open**.
 
-The script installs the build dependencies into `.dev/build/venv-macos`, packages the embedded GUI as `.dev/dist/Archivist.app`, and creates `.dev/dist/Archivist-Setup.dmg`. Open the disk image and drag Archivist into Applications; installing a newer version over the old one updates it in place. The app is built for the architecture of the Mac that builds it and is ad-hoc signed; set `CODESIGN_IDENTITY="Developer ID Application: ..."` to sign it with your own identity. On first launch of an ad-hoc signed app, right-click it and choose **Open**. Like the Windows app, it starts no network listener and works through an in-process bridge, and you can drop photos onto its window. Video features still need `ffmpeg` (the app also looks in `/opt/homebrew/bin` and `/usr/local/bin`).
+The downloaded app runs locally and does not require Python or a separate installation.
 
 ### Linux (Debian / Ubuntu)
 
