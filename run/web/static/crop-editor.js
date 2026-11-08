@@ -100,7 +100,7 @@ function createCropEditor(files, onChange) {
     if (!c || !W) {
       box.hidden = true;
       shade.hidden = true;
-      info.textContent = 'Drag on the photo to draw a crop. Photos left uncropped are skipped (unless a centre-crop ratio is set below).';
+      info.textContent = 'Drag on the image to draw a crop, or choose an aspect ratio.';
     } else {
       box.hidden = false;
       shade.hidden = false;
@@ -110,7 +110,7 @@ function createCropEditor(files, onChange) {
       const ratio = (c[2] * W) / (c[3] * H);
       info.textContent = `Keeping ${Math.round(c[2] * 100)}% × ${Math.round(c[3] * 100)}% of the photo · ratio ${ratio.toFixed(2)}:1`;
     }
-    counter.textContent = `${idx + 1} of ${files.length}`;
+    counter.textContent = files.length > 1 ? `${idx + 1} of ${files.length}` : '';
     strip.querySelectorAll('button').forEach((b, i) => {
       b.classList.toggle('active', i === idx);
       b.classList.toggle('cropped', !!crops[files[i].path]);
@@ -222,7 +222,8 @@ function createCropEditor(files, onChange) {
     strip.children[idx]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   img.addEventListener('load', render);
-  new ResizeObserver(() => render()).observe(img);
+  const resizeObserver = new ResizeObserver(() => render());
+  resizeObserver.observe(img);
 
   const prevBtn = el('button', { type: 'button', onclick: () => show(idx - 1) }, '‹ Previous');
   const nextBtn = el('button', { type: 'button', onclick: () => show(idx + 1) }, 'Next ›');
@@ -252,5 +253,5 @@ function createCropEditor(files, onChange) {
   swapBtn.disabled = true;
   show(0);
 
-  return { el: root, getCrops: () => ({ ...crops }) };
+  return { el: root, getCrops: () => ({ ...crops }), destroy: () => resizeObserver.disconnect() };
 }

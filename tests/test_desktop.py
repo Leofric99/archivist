@@ -43,6 +43,25 @@ def test_desktop_bridge_rejects_non_api_requests():
         bridge._close()
 
 
+def test_opening_video_replaces_previous_file(tmp_path):
+    photo = make_jpeg(tmp_path / "photo.jpg")
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"video")
+    bridge = DesktopBridge()
+    try:
+        assert bridge.add_files([str(photo)])["added"] == 1
+        assert bridge.add_files([str(photo), str(video)])["added"] == 0
+        assert bridge.add_files([str(video)])["added"] == 1
+        listing = json.loads(base64.b64decode(bridge.request("GET", "/api/files")["body"]))
+        assert len(listing["files"]) == 1
+        assert listing["files"][0]["name"] == "clip.mp4"
+        assert bridge.add_files([str(tmp_path / "missing.jpg")])["added"] == 0
+        listing = json.loads(base64.b64decode(bridge.request("GET", "/api/files")["body"]))
+        assert listing["files"][0]["name"] == "clip.mp4"
+    finally:
+        bridge._close()
+
+
 def test_dropped_images_keep_identity_after_rename_and_support_save_destinations(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
@@ -51,8 +70,9 @@ def test_dropped_images_keep_identity_after_rename_and_support_save_destinations
     elsewhere.mkdir()
     bridge = DesktopBridge()
     try:
-        added = bridge.add_files([str(photo), str(source / "not-an-image.txt")])
-        assert added == {"added": 1, "skipped": 1}
+        assert bridge.add_files([str(photo), str(source / "not-an-image.txt")]) == {"added": 0, "skipped": 2}
+        added = bridge.add_files([str(photo)])
+        assert added == {"added": 1, "skipped": 0}
 
         listing = json.loads(base64.b64decode(bridge.request("GET", "/api/files")["body"]))
         item = listing["files"][0]

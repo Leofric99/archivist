@@ -183,7 +183,22 @@ def create_app(token: str, port: int, root: Optional[Path] = None) -> FastAPI:
         except OSError as exc:
             raise HTTPException(403, f"Cannot read folder: {exc.strerror}")
         parent = str(folder.parent) if folder.parent != folder else None
-        return {"path": str(folder), "parent": parent, "folders": names}
+        media = sorted((p.name for p in folder.iterdir() if p.is_file() and not p.is_symlink() and kind_of(p)), key=str.lower)
+        return {"path": str(folder), "parent": parent, "folders": names, "files": media}
+
+    @api.post("/open-file")
+    def open_file(body: RootBody) -> dict:
+        if state.jobs.busy():
+            raise HTTPException(409, "Wait for the current operation to finish.")
+        try:
+            path = to_path(body.path)
+        except OperationError as exc:
+            raise HTTPException(400, str(exc))
+        if not path.is_file() or not kind_of(path):
+            raise HTTPException(400, "Choose a supported photo or video.")
+        state.ctx = Context(root=path.parent, tracked_files={uuid.uuid4().hex: path})
+        state.plans.clear()
+        return {"added": 1, "skipped": 0}
 
     @api.post("/root")
     def set_root(body: RootBody) -> dict:

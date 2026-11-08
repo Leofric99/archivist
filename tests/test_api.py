@@ -246,11 +246,12 @@ def test_rename_endpoint_needs_origin_and_cookie(root):
     assert names(root) == ["a.jpg"]
 
 
-def test_page_has_context_menu_and_rename_hooks(root):
+def test_page_has_file_workspace_and_rename_hooks(root):
     app = create_app(TOKEN, PORT, root)
     with TestClient(app, base_url=ORIGIN) as c:
         c.cookies.set("archivist_token", TOKEN)
         html = c.get("/").text
         js = c.get("/static/app.js").text
-    assert 'id="ctx-menu"' in html and 'id="side"' in html
-    assert "contextmenu" in js and "/rename" in js
+    assert 'id="media-stage"' in html and 'id="side"' in html
+    assert 'id="open-file"' in html and 'id="ctx-menu"' not in html
+    assert "contextmenu" not in js and "/rename" in js

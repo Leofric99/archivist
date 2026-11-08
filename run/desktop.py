@@ -54,15 +54,17 @@ class DesktopBridge:
         if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
             raise ValueError("Dropped file paths must be a list of strings.")
         state = self._app.state.archivist
-        current = state.ctx
-        ctx = current if current and current.tracked_files is not None else Context(
-            root=Path.home(), tracked_files={})
+        if len(paths) != 1:
+            return {"added": 0, "skipped": len(paths)}
+        if state.jobs.busy():
+            raise ValueError("Wait for the current operation to finish before opening another file.")
+        ctx = Context(root=Path.home(), tracked_files={})
         added = skipped = 0
         known = {path.resolve() for path in ctx.tracked_files.values()}
         for raw in paths[:5000]:
             try:
                 path = Path(raw).expanduser()
-                if path.is_symlink() or not path.is_file() or kind_of(path) != "image":
+                if path.is_symlink() or not path.is_file() or kind_of(path) not in {"image", "raw", "video"}:
                     skipped += 1
                     continue
                 path = path.resolve(strict=True)
@@ -83,6 +85,11 @@ class DesktopBridge:
 
     def _close(self) -> None:
         self._client.__exit__(None, None, None)
+
+    def choose_file(self) -> dict:
+        import webview
+        paths = webview.windows[0].create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False)
+        return self.add_files(list(paths)) if paths else {"added": 0, "skipped": 0}
 
 
 def _enable_file_drop(window, bridge: DesktopBridge) -> None:

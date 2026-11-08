@@ -12,6 +12,7 @@ const GROUP_TITLES = { photos: 'Photographs', videos: 'Videos', metadata: 'Metad
 const KIND_ICON = { image: '🖼️', raw: '📷', video: '🎞️' };
 const MAX_PLAN_ROWS = 300;
 const MAX_CAPTION_ROWS = 200;
+let activeTool = null;
 const isDesktop = document.documentElement.dataset.desktop === 'true' || window.location.protocol === 'file:';
 const desktopReady = new Promise(resolve => {
   if (window.pywebview?.api) resolve();
@@ -21,8 +22,7 @@ if (isDesktop) {
   $('.brand').addEventListener('click', event => event.preventDefault());
   $('#root-form').hidden = true;
   $('#subdirs-label').hidden = true;
-  $('#desktop-drop-note').hidden = false;
-  $('#drop-zone').hidden = false;
+  $('#desktop-drop-note').hidden = true;
 }
 
 // ---------- helpers ----------
@@ -172,11 +172,11 @@ async function openRoot(path) {
 async function loadFiles() {
   try {
     const data = await getJson(`/files?subdirs=${$('#subdirs').checked}`);
-    state.files = data.files;
+    state.files = data.files.slice(0, 1);
     state.collection = !!data.collection;
     state.root = data.root;
     const existing = new Set(data.files.map(f => f.path));
-    state.selected = new Set([...state.selected].filter(p => existing.has(p)));
+    state.selected = new Set(state.files.map(f => f.path));
     if (data.truncated) toast('Folder is very large; only the first files are shown.', 'info');
     renderAll();
   } catch (err) { toast(err.message); }
@@ -185,7 +185,7 @@ async function loadFiles() {
 window.archivistFilesDropped = async result => {
   if (!result.added && !result.skipped) return;
   if (!result.added) {
-    toast(`No photos were added; skipped ${result.skipped} unsupported or duplicate item${result.skipped === 1 ? '' : 's'}.`, 'info');
+    toast('Choose just one supported photo or video at a time.', 'info');
     return;
   }
   try {
@@ -197,7 +197,7 @@ window.archivistFilesDropped = async result => {
     $('#root-input').value = s.root || '';
     state.selected.clear();
     await loadFiles();
-    toast(`Added ${result.added} photo${result.added === 1 ? '' : 's'}${result.skipped ? `; skipped ${result.skipped}` : ''}.`, 'info');
+    toast('File opened. Choose an action in the sidebar.', 'info');
   } catch (err) { toast(err.message); }
 };
 
@@ -213,117 +213,8 @@ function applyFilters() {
   renderGrid();
 }
 
-function renderGrid() {
-  const grid = $('#grid');
-  grid.replaceChildren();
-  state.cards.clear();
-  const frag = document.createDocumentFragment();
-  for (const f of state.shown) {
-    const thumb = h('div', { class: 'thumb' }, KIND_ICON[f.kind] || '📄');
-    const card = h('div', {
-      class: 'card' + (state.selected.has(f.path) ? ' selected' : ''), role: 'option',
-      'aria-selected': state.selected.has(f.path), dataset: { path: f.path }, title: f.location || f.path,
-    }, h('span', { class: 'badge' }, f.kind), thumb, h('div', { class: 'name' }, f.name));
-    frag.append(card);
-    state.cards.set(f.path, card);
-    observer.observe(card);
-  }
-  grid.append(frag);
-  const empty = $('#empty');
-  if (!state.root && !state.collection) empty.textContent = isDesktop
-    ? 'Drop one or more photos into the Archivist window to get started.'
-    : 'Enter a folder path above (or use Browse…) to see its photos and videos.';
-  else if (state.collection && !state.files.length) empty.textContent = 'Drop photos here to add them to your selection.';
-  else if (state.collection && !state.shown.length) empty.textContent = 'No files match the current filters.';
-  else if (!state.files.length) empty.textContent = 'No supported photos or videos found in this folder.';
-  else if (!state.shown.length) empty.textContent = 'No files match the current filters.';
-  else empty.textContent = '';
-  $('#count').textContent = state.root || state.collection ? `${state.shown.length} shown · ${state.selected.size} selected` : '';
-}
 
-// Defer thumbnail requests until a card is near the viewport.
-const observer = new IntersectionObserver(entries => {
-  for (const entry of entries) {
-    if (!entry.isIntersecting) continue;
-    observer.unobserve(entry.target);
-    const f = state.files.find(x => x.path === entry.target.dataset.path);
-    if (!f) continue;
-    const thumb = entry.target.querySelector('.thumb');
-    const img = h('img', { alt: '' });
-    thumb.replaceChildren(img);
-    setImageSource(img, `/api/thumb?path=${enc(f.path)}`);
-  }
-}, { rootMargin: '400px' });
 
-function syncSelection() {
-  for (const [path, card] of state.cards) {
-    const on = state.selected.has(path);
-    card.classList.toggle('selected', on);
-    card.setAttribute('aria-selected', on);
-  }
-  $('#count').textContent = `${state.shown.length} shown · ${state.selected.size} selected`;
-  renderSide();
-}
-
-function onGridClick(e) {
-  const card = e.target.closest('.card');
-  if (!card) return;
-  const path = card.dataset.path;
-  if (e.shiftKey && state.anchor) {
-    const paths = state.shown.map(f => f.path);
-    const a = paths.indexOf(state.anchor), b = paths.indexOf(path);
-    if (a >= 0 && b >= 0) {
-      if (!(e.metaKey || e.ctrlKey)) state.selected.clear();
-      for (const p of paths.slice(Math.min(a, b), Math.max(a, b) + 1)) state.selected.add(p);
-    }
-  } else if (e.metaKey || e.ctrlKey) {
-    state.selected.has(path) ? state.selected.delete(path) : state.selected.add(path);
-    state.anchor = path;
-  } else {
-    const only = state.selected.size === 1 && state.selected.has(path);
-    state.selected.clear();
-    if (!only) state.selected.add(path);
-    state.anchor = path;
-  }
-  syncSelection();
-}
-
-// ---------- side panel: preview, details, rename ----------
-
-function renderSide() {
-  const side = $('#side');
-  const sel = selectedFiles();
-  $('.layout').classList.toggle('no-side', (!state.root && !state.collection) || sel.length === 0);
-  side.replaceChildren();
-  if ((!state.root && !state.collection) || !sel.length) return;
-  const close = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close preview', title: 'Close', onclick: () => { state.selected.clear(); syncSelection(); } }, '✕');
-  side.append(h('div', { class: 'side-head' }, h('h2', {}, sel.length === 1 ? 'Preview' : `${sel.length} selected`), close));
-  if (sel.length === 1) {
-    const f = sel[0];
-    const media = f.kind === 'video'
-      ? h('video', { class: 'preview', controls: true, preload: 'metadata' })
-      : h('img', { class: 'preview', alt: '' });
-    media.addEventListener('error', () => media.remove());
-    if (f.kind === 'video') {
-      mediaUrl(f.path).then(src => { if (media.isConnected) media.src = src; }).catch(err => toast(err.message));
-    } else {
-      setImageSource(media, `/api/preview?path=${enc(f.path)}`);
-    }
-    side.append(media, filenameEditor(f), h('div', { class: 'muted file-path' }, `${f.location || f.path} · ${formatBytes(f.size)}`));
-    const meta = h('div', { class: 'meta' });
-    side.append(h('h3', {}, 'Details'), meta);
-    loadInfo(f, meta);
-  } else {
-    const counts = {};
-    sel.forEach(f => { counts[f.kind] = (counts[f.kind] || 0) + 1; });
-    side.append(h('p', { class: 'muted' }, Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(', ')),
-      h('p', { class: 'muted' }, 'Select a single file to see its preview and details, or right-click the selection for actions.'));
-  }
-  if (state.pendingRename && sel.length === 1 && sel[0].path === state.pendingRename) {
-    state.pendingRename = null;
-    side.querySelector('.filename-btn')?.click();
-  }
-}
 
 // The file name shows as a button; clicking it swaps in an input for the name (the extension stays fixed).
 function filenameEditor(file) {
@@ -377,104 +268,6 @@ function filenameEditor(file) {
   return wrap;
 }
 
-// ---------- context menu ----------
-
-const menuEl = () => $('#ctx-menu');
-
-function closeMenu(restoreFocus = false) {
-  const m = menuEl();
-  if (m.hidden) return;
-  m.hidden = true;
-  m.replaceChildren();
-  if (restoreFocus) $('#grid').focus({ preventScroll: true });
-}
-
-function openMenu(x, y, items) {
-  const m = menuEl();
-  m.replaceChildren();
-  for (const it of items) {
-    if (it.heading) m.append(h('div', { class: 'ctx-heading', role: 'presentation' }, it.heading));
-    else if (it.separator) m.append(h('div', { class: 'ctx-sep', role: 'separator' }));
-    else {
-      m.append(h('button', { type: 'button', role: 'menuitem', class: 'ctx-item' + (it.danger ? ' ctx-danger' : ''), disabled: it.disabled, onclick: () => { closeMenu(); it.run?.(); } },
-        h('span', {}, it.label), it.hint && h('span', { class: 'ctx-hint' }, it.hint)));
-    }
-  }
-  m.hidden = false;
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
-  m.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
-  m.querySelector('.ctx-item:not(:disabled)')?.focus({ preventScroll: true });
-}
-
-function menuKeydown(e) {
-  const m = menuEl();
-  if (m.hidden) return;
-  const items = [...m.querySelectorAll('.ctx-item:not(:disabled)')];
-  const i = items.indexOf(document.activeElement);
-  if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
-  else if (e.key === 'Home') { e.preventDefault(); items[0]?.focus(); }
-  else if (e.key === 'End') { e.preventDefault(); items.at(-1)?.focus(); }
-  else if (e.key === 'Tab') { closeMenu(true); }
-}
-
-function opItem(op, sel) {
-  const n = sel.filter(f => op.accepts.includes(f.kind)).length;
-  const noFfmpeg = op.group === 'videos' && !state.tools.ffmpeg;
-  const hint = noFfmpeg ? 'ffmpeg not found' : op.scope === 'folder' ? 'whole folder' : (sel.length > 1 ? `${n} of ${sel.length}` : '');
-  return { label: op.label, hint, disabled: noFfmpeg, danger: op.destructive && op.scope === 'folder', run: () => openOp(op) };
-}
-
-function folderItems() {
-  const items = [{ heading: GROUP_TITLES.folder }];
-  state.ops.filter(op => op.scope === 'folder').forEach(op => items.push(opItem(op, [])));
-  return items;
-}
-
-function fileMenuItems(sel) {
-  const items = [];
-  if (sel.length === 1) {
-    items.push({ label: 'Rename…', run: () => { state.pendingRename = sel[0].path; renderSide(); } }, { separator: true });
-  }
-  let any = false;
-  for (const group of ['photos', 'videos', 'metadata']) {
-    const ops = state.ops.filter(op => op.group === group && op.scope === 'files' && sel.some(f => op.accepts.includes(f.kind)));
-    if (!ops.length) continue;
-    any = true;
-    items.push({ heading: GROUP_TITLES[group] }, ...ops.map(op => opItem(op, sel)));
-  }
-  if (!any) items.push({ label: 'No actions for this selection', disabled: true });
-  if (state.root) items.push({ separator: true }, ...folderItems());
-  return items;
-}
-
-function emptyMenuItems() {
-  return [
-    { label: 'Select all shown', run: () => { state.shown.forEach(f => state.selected.add(f.path)); syncSelection(); } },
-    { label: 'Refresh', run: () => loadFiles() },
-    ...(state.root ? [{ separator: true }, ...folderItems()] : []),
-  ];
-}
-
-function onGridContextMenu(e) {
-  if (!state.root && !state.collection) return;
-  e.preventDefault();
-  const card = e.target.closest('.card');
-  const fromKeyboard = e.button === 0 && e.clientX === 0 && e.clientY === 0;
-  if (card) {
-    const path = card.dataset.path;
-    // Like a file manager: right-clicking outside the selection selects just that file.
-    if (!state.selected.has(path)) { state.selected = new Set([path]); state.anchor = path; syncSelection(); }
-    openMenu(e.clientX, e.clientY, fileMenuItems(selectedFiles()));
-  } else if (fromKeyboard && state.selected.size) {
-    const first = state.cards.get([...state.selected][0])?.getBoundingClientRect();
-    openMenu(first ? first.left + 20 : 40, first ? first.top + 20 : 40, fileMenuItems(selectedFiles()));
-  } else {
-    openMenu(e.clientX || 40, e.clientY || 40, emptyMenuItems());
-  }
-}
 
 async function loadInfo(file, target) {
   const token = ++state.infoToken;
@@ -491,7 +284,7 @@ async function loadInfo(file, target) {
 
 // ---------- folder browser ----------
 
-function openBrowse(startPath, onChoose) {
+function openBrowse(startPath, onChoose, chooseFile = false) {
   const dlg = $('#browse-dialog');
   let current = '';
   async function go(path) {
@@ -503,46 +296,83 @@ function openBrowse(startPath, onChoose) {
       list.replaceChildren();
       if (data.parent) list.append(h('li', { onclick: () => go(data.parent) }, '⬆️  ..'));
       data.folders.forEach(name => list.append(h('li', { onclick: () => go(current.replace(/[\\/]+$/, '') + (current.includes('\\') ? '\\' : '/') + name) }, '📁 ' + name)));
+      if (chooseFile) data.files.forEach(name => list.append(h('li', {}, h('button', { type: 'button', onclick: () => { dlg.close(); onChoose(current.replace(/[\\/]+$/, '') + '/' + name); } }, name))));
     } catch (err) { toast(err.message); }
   }
   $('#browse-cancel').onclick = () => dlg.close();
   $('#browse-choose').onclick = () => { dlg.close(); onChoose(current); };
+  $('#browse-choose').hidden = chooseFile;
+  dlg.querySelector('h2').textContent = chooseFile ? 'Open a photo or video' : 'Choose a folder';
   go(startPath);
   dlg.showModal();
 }
 
 // ---------- operation dialog ----------
 
+function toolTitle(op) {
+  return { crop: 'Crop image', burnin_basic: 'Add date & text', burnin_caption: 'Add a caption band', burnin_video: 'Add date & text', rename_digital: 'Rename from capture date', rename_film: 'Rename with a custom date', rename_videos: 'Rename video', export_metadata: 'Export metadata', import_metadata: 'Import metadata', clone_metadata: 'Copy metadata from another image' }[op.id] || op.label;
+}
+function toolDescription(op) {
+  return { crop: 'Draw a crop on the image, or choose an aspect ratio.', burnin_basic: 'Add a date and optional text to your image.', burnin_caption: 'Add a caption band below your image. The preview updates as you type.', burnin_video: 'Add a date and optional text to your video.', rename_digital: 'Name your file using its capture date and an optional suffix.', rename_film: 'Name your scan using a date you provide.', rename_videos: 'Name your video using its creation date.', export_metadata: 'Save this image’s metadata beside it as CSV or JSON. Overwrite replaces an earlier export, never the image.', import_metadata: 'Read matching metadata from a CSV or JSON file and apply it to this image.', clone_metadata: 'Copy metadata and timestamps from a source image to this image.' }[op.id] || op.description;
+}
 function paramVisible(param, values) {
   if (!param.show_if) return true;
   return Object.entries(param.show_if).every(([k, v]) => typeof v === 'boolean' ? !!values[k] === v : values[k] === v);
 }
 
 function openOp(op) {
-  const dlg = $('#op-dialog');
+  activeTool?.dispose();
+  const dlg = $('#side');
   const files = op.scope === 'files' ? selectedFiles().filter(f => op.accepts.includes(f.kind)) : [];
   const ctx = { op, files, plan: null, answers: {}, inputs: {}, captionInputs: {}, cropEditor: null, running: false, logCount: 0 };
+  const isRename = op.id.startsWith('rename_');
+  let saveMode = 'copy', planningVersion = 0;
+  let previewTimer, previewVersion = 0, previewUrl = null;
+  const dispose = () => {
+    planningVersion++;
+    clearTimeout(previewTimer);
+    previewVersion++;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    ctx.cropEditor?.destroy();
+    activeTool = null;
+    $('#media-stage').dataset.path = '';
+  };
+  activeTool = { path: files[0]?.path, dispose };
+  const back = () => {
+    if (ctx.running) return;
+    dispose();
+    renderGrid();
+    renderSide();
+  };
 
   const fields = h('fieldset', { class: 'fields', style: 'border:0;padding:0;margin:0' });
   const planArea = h('div', { class: 'plan' });
   const jobArea = h('div', { class: 'job' });
-  const closeBtn = h('button', { type: 'button', onclick: () => dlg.close() }, 'Close');
+  const closeBtn = h('button', { type: 'button', class: 'tool-back', onclick: back }, '← All tools');
   const reviewBtn = h('button', { type: 'button', class: 'primary', onclick: () => runPlan() }, 'Review changes');
   const applyBtn = h('button', { type: 'button', class: op.destructive ? 'danger' : 'primary', hidden: true, disabled: true, onclick: () => applyPlan() }, 'Apply');
   const cancelBtn = h('button', { type: 'button', hidden: true, onclick: () => ctx.jobId && api(`/jobs/${ctx.jobId}/cancel`, { method: 'POST' }) }, 'Cancel job');
+  const copyBtn = h('button', { type: 'button', class: 'primary', onclick: () => save('copy') }, 'Save as copy');
+  const overwriteBtn = h('button', { type: 'button', onclick: () => save('overwrite') }, 'Save and overwrite');
+  const saveButtons = [copyBtn, overwriteBtn];
 
   const scopeText = op.scope === 'folder'
     ? `Applies to every supported file in ${state.root} (including subfolders), regardless of the current selection.`
-    : `${files.length} file(s) selected.`;
+    : files[0]?.name || 'No file open.';
   dlg.replaceChildren(
-    h('h2', {}, op.label), h('p', { class: 'muted' }, op.description), h('p', {}, scopeText),
-    fields, planArea, jobArea, h('div', { class: 'dialog-actions' }, cancelBtn, closeBtn, reviewBtn, applyBtn));
+    closeBtn,
+    h('h2', {}, toolTitle(op)), h('p', { class: 'muted' }, toolDescription(op)), h('p', {}, scopeText),
+    fields, planArea, jobArea, h('div', { class: 'tool-actions' }, cancelBtn, ...(isRename ? [reviewBtn, applyBtn] : saveButtons)));
+  dlg.scrollTop = 0;
 
   const refreshVisibility = () => {
     const values = collectParams(false);
-    for (const p of op.params) ctx.inputs[p.name].wrap.classList.toggle('hidden', !paramVisible(p, values));
+    for (const p of op.params) ctx.inputs[p.name].wrap.classList.toggle('hidden', hiddenParam(p) || !paramVisible(p, values));
   };
+  function hiddenParam(p) { return ['overwrite', 'output_dir', 'include_raw', 'include_video'].includes(p.name) || (op.editor === 'crop' && p.name === 'ratio'); }
   const invalidate = () => {
+    planningVersion++;
+    schedulePreview();
     if (ctx.running || !ctx.plan) return;
     ctx.plan = null;
     ctx.answers = {};
@@ -556,6 +386,11 @@ function openOp(op) {
       const el = ctx.inputs[p.name].el;
       out[p.name] = p.kind === 'bool' ? el.checked : el.value.trim();
     }
+    out.overwrite = saveMode === 'overwrite';
+    out.save_mode = saveMode;
+    if ('output_dir' in out) out.output_dir = op.id === 'export_metadata' ? (files[0].location || files[0].path).replace(/[\\/][^\\/]+$/, '') : '';
+    if ('include_raw' in out) out.include_raw = files[0]?.kind === 'raw';
+    if ('include_video' in out) out.include_video = files[0]?.kind === 'video';
     if (withCaptions) {
       out.captions = {};
       for (const [path, el] of Object.entries(ctx.captionInputs)) if (el.value.trim()) out.captions[path] = el.value.trim();
@@ -590,8 +425,8 @@ function openOp(op) {
     const wrap = h('div', { class: 'field' },
       p.kind === 'bool'
         ? h('label', { class: 'inline' }, el, ' ', p.label + (p.required ? ' *' : ''))
-        : [h('label', { class: 'title', for: id }, p.label + (p.required ? ' *' : '')), control],
-      datalist, p.help && h('div', { class: 'help' }, p.help));
+        : [h('label', { class: 'title', for: id }, p.name === 'date' ? 'Date' : p.label + (p.required ? ' *' : '')), control],
+      datalist, p.help && !['text', 'suffix', 'source'].includes(p.name) && h('div', { class: 'help' }, p.name === 'font' ? 'Choose a font to see it in the live preview.' : p.help));
     ctx.inputs[p.name] = { el, wrap };
     fields.append(wrap);
   }
@@ -599,47 +434,58 @@ function openOp(op) {
 
   if (op.editor === 'crop' && files.length) {
     ctx.cropEditor = createCropEditor(files, invalidate);
-    fields.prepend(ctx.cropEditor.el);
+    const canvas = $('#media-stage .preview-canvas');
+    canvas.replaceChildren(ctx.cropEditor.el);
+    fields.prepend(ctx.cropEditor.el.querySelector('.crop-toolbar'));
   }
 
-  const previewImg = h('img', { class: 'preview-img', alt: '', hidden: true });
-  async function previewFile(file, caption) {
+  const previewImg = $('#media-stage .full-preview');
+  const previewStatus = h('p', { class: 'help', role: 'status', 'aria-live': 'polite' });
+  if (op.previewable) fields.append(previewStatus);
+  function schedulePreview() {
+    if (!op.previewable || ctx.running) return;
+    clearTimeout(previewTimer);
+    const version = ++previewVersion;
+    previewStatus.textContent = 'Updating preview…';
+    previewTimer = setTimeout(() => previewFile(files[0], ctx.captionInputs[files[0].path]?.value || '', version), 350);
+  }
+  async function previewFile(file, caption, version) {
     try {
       const res = await api(`/ops/${op.id}/preview`, { method: 'POST', body: { path: file.path, params: collectParams(false), caption } });
       const url = URL.createObjectURL(await res.blob());
-      if (previewImg.src.startsWith('blob:')) URL.revokeObjectURL(previewImg.src);
+      if (version !== previewVersion || !previewImg?.isConnected) { URL.revokeObjectURL(url); return; }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = url;
       previewImg.src = url;
       previewImg.hidden = false;
-    } catch (err) { toast(err.message); }
+      previewStatus.textContent = 'Live preview · original unchanged';
+    } catch (err) {
+      if (version === previewVersion) previewStatus.textContent = `Preview unavailable: ${err.message}`;
+    }
   }
 
-  if (op.captions && files.length) {
-    const box = h('details', { class: 'captions', open: op.captions === 'required' },
-      h('summary', {}, op.captions === 'required' ? 'Caption for each photo (photos left blank are skipped)' : 'Optional per-file text (blank uses the text above)'));
+  if (op.captions === 'required' && files.length) {
+    const box = h('div', { class: 'field' });
     for (const f of files.slice(0, MAX_CAPTION_ROWS)) {
       const input = h('input', { type: 'text', placeholder: 'Caption', 'aria-label': 'Caption for ' + f.name });
       input.addEventListener('input', invalidate);
       ctx.captionInputs[f.path] = input;
-      const img = h('img', { alt: '', loading: 'lazy' });
-      box.append(h('div', { class: 'caption-row' },
-        img,
-        input,
-        op.previewable && h('button', { type: 'button', onclick: () => previewFile(f, input.value) }, 'Preview'),
-        h('div', { class: 'fname' }, f.path)));
-      if (f.kind !== 'video') setImageSource(img, `/api/thumb?path=${enc(f.path)}`);
+      input.id = 'image-caption';
+      box.append(h('label', { class: 'title', for: input.id }, 'Caption'), input);
     }
-    if (files.length > MAX_CAPTION_ROWS) box.append(h('p', { class: 'muted' }, `Captions can be entered for the first ${MAX_CAPTION_ROWS} files only.`));
     fields.append(box);
   }
-  if (op.previewable && files.length) {
-    fields.append(h('button', { type: 'button', onclick: () => previewFile(files[0], ctx.captionInputs[files[0].path]?.value || '') }, `Preview on ${files[0].name}`), previewImg);
-  }
+  if (op.previewable && files.length) schedulePreview();
 
   async function runPlan() {
+    const version = ++planningVersion;
     reviewBtn.disabled = true;
     try {
-      ctx.plan = await getJson(`/ops/${op.id}/plan`, { method: 'POST', body: { paths: files.map(f => f.path), params: collectParams(), answers: ctx.answers } });
+      const plan = await getJson(`/ops/${op.id}/plan`, { method: 'POST', body: { paths: files.map(f => f.path), params: collectParams(), answers: ctx.answers } });
+      if (version !== planningVersion) return false;
+      ctx.plan = plan;
       renderPlan();
+      return plan.ready;
     } catch (err) {
       ctx.plan = null;
       planArea.replaceChildren(h('div', { class: 'notice error' }, err.message));
@@ -647,12 +493,29 @@ function openOp(op) {
     } finally { reviewBtn.disabled = false; }
   }
 
+  async function save(mode) {
+    if (ctx.running) return;
+    saveMode = mode;
+    saveButtons.forEach(b => { b.disabled = true; });
+    try {
+      if (!await runPlan()) return;
+      if (mode === 'overwrite' && !window.confirm(op.id === 'export_metadata'
+        ? 'Replace the existing exported metadata file? The photo itself will not be changed.'
+        : `Save changes over “${files[0].name}”? This will replace the original file and cannot be undone.`)) {
+        ctx.plan = null;
+        planArea.replaceChildren();
+        return;
+      }
+      await applyPlan();
+    } finally { if (!ctx.running) saveButtons.forEach(b => { b.disabled = false; }); }
+  }
+
   function renderPlan() {
     const plan = ctx.plan;
     planArea.replaceChildren();
     plan.errors.forEach(m => planArea.append(h('div', { class: 'notice error' }, m)));
     plan.warnings.forEach(m => planArea.append(h('div', { class: 'notice warn' }, m)));
-    if (plan.summary) planArea.append(h('p', {}, h('strong', {}, plan.summary)));
+    if (plan.ready) planArea.append(h('p', {}, h('strong', {}, isRename ? 'Ready to rename.' : 'Ready to save.')));
     if (plan.questions.length) {
       planArea.append(h('h3', {}, 'Please answer'));
       for (const q of plan.questions) {
@@ -664,11 +527,9 @@ function openOp(op) {
         planArea.append(h('div', { class: 'question' }, h('div', {}, q.prompt), h('div', { class: 'detail' }, q.detail), radio('yes', 'Yes, group them'), radio('no', 'No, keep separate')));
       }
     }
-    if (plan.items.length) {
-      const rows = plan.items.slice(0, MAX_PLAN_ROWS).map(i => h('tr', { class: i.status },
-        h('td', {}, i.status === 'ok' ? '→' : i.status === 'skip' ? '·' : '✗'), h('td', {}, i.source), h('td', {}, i.target || ''), h('td', {}, i.note)));
-      planArea.append(h('div', { class: 'table-wrap' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'File'), h('th', {}, 'Result'), h('th', {}, 'Note'))), h('tbody', {}, rows))));
-      if (plan.items.length > MAX_PLAN_ROWS) planArea.append(h('p', { class: 'muted' }, `Showing the first ${MAX_PLAN_ROWS} of ${plan.items.length} files.`));
+    for (const item of plan.items) {
+      if (item.target) planArea.append(h('p', { class: 'save-destination' }, 'Save to: ', item.target === files[0].path ? files[0].location || files[0].name : item.target));
+      if (item.note) planArea.append(h('p', { class: 'muted' }, item.note));
     }
     let confirmInput = null;
     if (plan.confirmation) {
@@ -685,18 +546,31 @@ function openOp(op) {
   }
 
   async function applyPlan() {
+    ctx.running = true;
+    closeBtn.disabled = $('#open-file').disabled = true;
+    fields.disabled = reviewBtn.disabled = applyBtn.disabled = true;
     try {
       const res = await getJson(`/ops/${op.id}/apply`, { method: 'POST', body: { plan_id: ctx.plan.plan_id, confirm: ctx.confirmInput ? ctx.confirmInput.value : null } });
       ctx.jobId = res.job_id;
       startJob();
-    } catch (err) { toast(err.message); }
+    } catch (err) {
+      ctx.running = false;
+      closeBtn.disabled = $('#open-file').disabled = false;
+      fields.disabled = reviewBtn.disabled = applyBtn.disabled = false;
+      toast(err.message);
+    }
   }
 
   function startJob() {
     ctx.running = true;
+    saveButtons.forEach(b => { b.hidden = true; });
+    clearTimeout(previewTimer);
+    previewVersion++;
+    $('#open-file').disabled = true;
+    closeBtn.disabled = true;
     fields.disabled = true;
     planArea.hidden = true;
-    reviewBtn.hidden = applyBtn.hidden = closeBtn.hidden = true;
+    reviewBtn.hidden = applyBtn.hidden = true;
     cancelBtn.hidden = false;
     const bar = h('div', {});
     const status = h('div', { class: 'muted' }, 'Starting…');
@@ -727,39 +601,101 @@ function openOp(op) {
 
   async function finishJob(s) {
     ctx.running = false;
+    $('#open-file').disabled = false;
+    closeBtn.disabled = false;
     cancelBtn.hidden = true;
     closeBtn.hidden = false;
     const kind = s.status === 'done' && !s.counts.failed ? 'ok' : s.status === 'done' ? 'warn' : 'error';
     const text = s.status === 'cancelled' ? 'Cancelled.' : s.status === 'error' ? `Stopped by an error: ${s.error}` : 'Finished.';
-    jobArea.prepend(h('div', { class: 'notice ' + kind }, `${text} ${s.counts.ok} succeeded, ${s.counts.skipped} skipped, ${s.counts.failed} failed.`));
+    jobArea.prepend(h('div', { class: 'notice ' + kind }, s.status === 'done' && s.counts.ok ? 'Saved successfully.' : text));
     state.selected.clear();
+    $('#media-stage').dataset.path = '';
     await loadFiles();
   }
 
-  dlg.oncancel = e => { if (ctx.running) e.preventDefault(); };
-  dlg.showModal();
+  closeBtn.focus({ preventScroll: true });
 }
 
 // ---------- startup ----------
 
-$('#root-form').addEventListener('submit', e => { e.preventDefault(); const v = $('#root-input').value.trim(); if (v) openRoot(v); });
-$('#browse-btn').addEventListener('click', () => openBrowse($('#root-input').value || state.home, path => openRoot(path)));
-$('#subdirs').addEventListener('change', () => { if (state.root) loadFiles(); });
-document.querySelectorAll('.kind-filter').forEach(i => i.addEventListener('change', applyFilters));
-let searchTimer;
-$('#search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 150); });
-$('#grid').addEventListener('click', e => { closeMenu(); onGridClick(e); });
-$('#grid').addEventListener('contextmenu', onGridContextMenu);
-$('#empty').addEventListener('contextmenu', onGridContextMenu);
-$('#grid').addEventListener('keydown', e => {
-  if (e.key === 'Escape' && state.selected.size) { state.selected.clear(); syncSelection(); }
-});
-document.addEventListener('keydown', menuKeydown);
-document.addEventListener('pointerdown', e => { if (!e.target.closest('#ctx-menu')) closeMenu(); }, true);
-window.addEventListener('blur', () => closeMenu());
-window.addEventListener('resize', () => closeMenu());
-$('#grid').addEventListener('scroll', () => closeMenu(), { passive: true });
-$('#select-all').addEventListener('click', () => { state.shown.forEach(f => state.selected.add(f.path)); syncSelection(); });
-$('#clear-selection').addEventListener('click', () => { state.selected.clear(); syncSelection(); });
+async function chooseMedia() {
+  try {
+    if (isDesktop) {
+      await desktopReady;
+      await window.archivistFilesDropped(await window.pywebview.api.choose_file());
+    } else {
+      openBrowse(state.home, async path => {
+        try {
+          await window.archivistFilesDropped(await getJson('/open-file', { method: 'POST', body: { path } }));
+        } catch (err) { toast(err.message); }
+      }, true);
+    }
+  } catch (err) { toast(err.message); }
+}
+
+function renderGrid() {
+  const stage = $('#media-stage');
+  const file = state.files[0];
+  if (activeTool && activeTool.path !== file?.path) activeTool.dispose();
+  const empty = $('#empty');
+  empty.replaceChildren();
+  stage.hidden = !file;
+  $('#open-file').textContent = file ? 'Open another file' : 'Open photo or video';
+  if (!file) {
+    stage.replaceChildren();
+    empty.append(h('div', { class: 'empty-mark', 'aria-hidden': 'true' }, '＋'),
+      h('p', { class: 'eyebrow' }, 'ONE FILE. YOUR FULL ATTENTION.'),
+      h('h1', {}, 'Give your memories a little care.'),
+      h('p', {}, 'Open a photo or video to preview, crop, add text, or manage its details.'),
+      h('button', { type: 'button', class: 'primary', onclick: chooseMedia }, 'Open photo or video'),
+      h('p', { class: 'empty-footnote' }, isDesktop ? 'Or drop one file anywhere in this window.' : 'Choose one file from your computer.'));
+    return;
+  }
+  // Keep the current player mounted when an operation refreshes file details.
+  if (stage.dataset.path === file.path && stage.dataset.name === file.name) return;
+  stage.dataset.path = file.path;
+  stage.dataset.name = file.name;
+  const media = file.kind === 'video'
+    ? h('video', { controls: true, preload: 'metadata', class: 'full-preview', 'aria-label': file.name })
+    : h('img', { class: 'full-preview', alt: file.name });
+  const error = h('p', { class: 'preview-error', hidden: true }, 'A preview is unavailable for this format. You can still use the tools in the sidebar.');
+  media.addEventListener('error', () => { media.hidden = true; error.hidden = false; });
+  stage.replaceChildren(h('div', { class: 'stage-heading' }, h('span', {}, file.kind === 'video' ? 'VIDEO PREVIEW' : 'PHOTO PREVIEW'), h('span', {}, formatBytes(file.size))),
+    h('div', { class: 'preview-canvas' }, media, error), h('div', { class: 'stage-caption' }, file.name));
+  if (file.kind === 'video') mediaUrl(file.path).then(src => { if (media.isConnected) media.src = src; }).catch(err => toast(err.message));
+  else setImageSource(media, `/api/preview?path=${enc(file.path)}`);
+}
+
+function renderSide() {
+  if (activeTool) return;
+  const side = $('#side');
+  const file = state.files[0];
+  $('.layout').classList.toggle('no-side', !file);
+  side.replaceChildren();
+  if (!file) return;
+  side.append(h('p', { class: 'eyebrow' }, 'YOUR WORKSPACE'), h('h2', {}, 'Make it yours'),
+    h('p', { class: 'muted' }, 'Choose a tool, adjust its options, then review your changes.'),
+    filenameEditor(file));
+  const names = { photos: 'Photo tools', videos: 'Video tools', metadata: 'File details' };
+  const labels = { crop: 'Crop image', burnin_basic: 'Add date & text', burnin_verbose: 'Add a caption band', rename_digital: 'Rename from capture date', rename_film: 'Rename with a custom date' };
+  for (const group of ['photos', 'videos', 'metadata']) {
+    const actions = state.ops.filter(op => op.group === group && op.scope === 'files' && op.accepts.includes(file.kind));
+    if (!actions.length) continue;
+    side.append(h('h3', {}, names[group]));
+    for (const op of actions) {
+      const unavailable = group === 'videos' && !state.tools.ffmpeg;
+      side.append(h('button', { type: 'button', class: 'tool-button', disabled: unavailable, onclick: () => openOp(op) },
+        h('span', { class: 'tool-title' }, toolTitle(op), h('span', { 'aria-hidden': 'true' }, ' →')),
+        h('span', { class: 'tool-description' }, unavailable ? 'Install ffmpeg to use video tools.' : toolDescription(op))));
+    }
+  }
+  const meta = h('div', { class: 'meta' });
+  side.append(h('h3', {}, 'About this file'), h('div', { class: 'muted file-path' }, file.location || file.path), meta,
+    h('p', { class: 'sidebar-note' }, 'Files stay on your computer. Crop and text tools save a new copy by default.'));
+  loadInfo(file, meta);
+}
+
+$('#open-file').addEventListener('click', chooseMedia);
+
 
 loadState().catch(err => toast(err.message));

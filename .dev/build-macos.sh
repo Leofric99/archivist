@@ -43,7 +43,8 @@ import sys
 from PIL import Image
 
 with Image.open(sys.argv[1]) as logo:
-    logo = logo.convert("RGB")
+    # iconutil requires PNGs with an alpha channel on macOS.
+    logo = logo.convert("RGBA")
     side = round(logo.height * 0.9)
     left = round(logo.width * 0.02)
     top = (logo.height - side) // 2
@@ -52,7 +53,13 @@ with Image.open(sys.argv[1]) as logo:
         mark.resize((size, size), Image.Resampling.LANCZOS).save(f"{sys.argv[2]}/icon_{size}x{size}.png")
         mark.resize((size * 2, size * 2), Image.Resampling.LANCZOS).save(f"{sys.argv[2]}/icon_{size}x{size}@2x.png")
 PY
-iconutil -c icns "$ICONSET" -o "$ICNS"
+ICON_ARGS=()
+if iconutil -c icns "$ICONSET" -o "$ICNS"; then
+    ICON_ARGS=(--icon "$ICNS")
+else
+    echo "Warning: macOS rejected the generated icon set; using the source logo for the app icon." >&2
+    ICON_ARGS=(--icon "$REPO_ROOT/images/archivist.png")
+fi
 
 rm -rf "$APP" "$DIST_ROOT/Archivist"
 "$PYTHON" -m PyInstaller \
@@ -60,7 +67,7 @@ rm -rf "$APP" "$DIST_ROOT/Archivist"
     --clean \
     --windowed \
     --name Archivist \
-    --icon "$ICNS" \
+    "${ICON_ARGS[@]}" \
     --osx-bundle-identifier "com.archivist.app" \
     --distpath "$DIST_ROOT" \
     --workpath "$BUILD_ROOT/pyinstaller" \

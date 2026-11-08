@@ -106,6 +106,14 @@ In VS Code, use **Python: Select Interpreter** to select your new environment's 
 
 ## Running Archivist
 
+### Single-file editing workspace
+
+Editing tools offer **Save as copy** and **Save and overwrite**. Copies are saved beside the original; overwriting requires a confirmation. Metadata import and cloning support both choices too. For metadata export, overwrite replaces the exported CSV/JSON rather than the image itself. Rename tools keep their review-and-rename workflow.
+
+The interface now works on one photo or video at a time. Use **Open photo or video** (a native file picker in the desktop app), or drop a single file onto the desktop window. Opening another file replaces the current editing session. Multiple-file drops are rejected without replacing the open file.
+
+The file opens in a large preview, with playback controls for video. Photo/video tools and metadata actions appear as buttons in the sidebar; click the filename to rename it. Choosing a tool replaces the sidebar with its settings; **← All tools** returns to the tool list. Image text, custom dates, captions and fonts update the main preview automatically as you edit. Cropping works directly on the main image, with ratio controls in the sidebar. Review and apply changes in the sidebar when ready. Crop and text operations save a new copy by default. Video tools use the original playback preview rather than a live burn-in render. The older folder-grid and right-click workflows described below are superseded by this workspace; bulk folder operations remain available through the CLI.
+
 Activate the environment in each new terminal, then start Archivist from the repository directory. Substitute your environment name if you used something other than `.venv`:
 
 ```bash

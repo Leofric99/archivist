@@ -128,6 +128,34 @@ def test_clone_source_must_be_inside_root_when_relative(root, ctx):
         ops.get("clone_metadata").plan(ctx, [a], {"source": "../outside.jpg"}, {})
 
 
+@pytest.mark.parametrize("mode", ["copy", "overwrite"])
+def test_clone_single_file_save_modes(root, ctx, mode):
+    source = make_jpeg(root / "source.jpg", datetime(2020, 5, 17, 1, 2, 3))
+    target = make_jpeg(root / "target.jpg")
+    original = target.read_bytes()
+    plan, rep = run(ops.get("clone_metadata"), ctx, [target], {"source": str(source), "save_mode": mode})
+    output = Path(plan.items[0].target)
+    assert rep.n_ok == 1
+    if mode == "copy":
+        assert target.read_bytes() == original
+        assert output == root / "target_archivist.jpg"
+    else:
+        assert output == target
+    with Image.open(output) as image:
+        assert image.getexif().get_ifd(0x8769)[36867] == "2020:05:17 01:02:03"
+
+
+def test_import_single_file_copy_preserves_original(root, ctx, tmp_path):
+    target = make_jpeg(root / "target.jpg")
+    original = target.read_bytes()
+    meta = tmp_path / "metadata.json"
+    meta.write_text(json.dumps([{"File Name": "target.jpg", "EXIF Data": {"DateTimeOriginal": "2020:05:17 01:02:03"}}]))
+    plan, rep = run(IMPORT, ctx, [target], {"metadata_file": str(meta), "save_mode": "copy"})
+    assert rep.n_ok == 1
+    assert target.read_bytes() == original
+    assert Path(plan.items[0].target).is_file()
+
+
 def test_courier_new_is_selectable_and_monospace_when_installed():
     from run.core import fonts
     if "Courier New" not in fonts.available_fonts():

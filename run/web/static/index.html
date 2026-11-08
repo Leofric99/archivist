@@ -12,19 +12,21 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="Archivist"><img src="logo.png" alt="Archivist" width="128" height="42"></a>
-    <form id="root-form" class="root-form" autocomplete="off">
+    <span class="workspace-label">Your personal editing desk</span>
+    <button id="open-file" type="button">Open photo or video</button>
+    <form id="root-form" class="root-form" autocomplete="off" hidden>
       <input id="root-input" type="text" placeholder="Folder path, e.g. /Users/me/Pictures/Scans" aria-label="Folder path">
       <button type="submit" class="primary">Open</button>
       <button type="button" id="browse-btn">Browse…</button>
     </form>
-    <label id="subdirs-label" class="inline"><input type="checkbox" id="subdirs" checked> Include subfolders</label>
+    <label id="subdirs-label" class="inline" hidden><input type="checkbox" id="subdirs"> Include subfolders</label>
     <span id="desktop-drop-note" class="desktop-drop-note" hidden>Drop photos here to begin</span>
     <span class="local-note" title="Archivist runs locally. Files are read from disk and never uploaded.">🔒 Local only</span>
   </header>
 
   <div class="layout">
     <main>
-      <div class="toolbar">
+      <div class="toolbar" hidden>
         <label class="inline"><input type="checkbox" class="kind-filter" value="image" checked> Photos</label>
         <label class="inline"><input type="checkbox" class="kind-filter" value="raw" checked> RAW</label>
         <label class="inline"><input type="checkbox" class="kind-filter" value="video" checked> Videos</label>
@@ -35,16 +37,14 @@
         <button type="button" id="select-all">Select all shown</button>
         <button type="button" id="clear-selection">Clear</button>
       </div>
-      <div id="drop-zone" class="drop-zone" hidden>Drop one or more photos here to add them to Archivist.</div>
       <div id="empty" class="empty"></div>
+      <div id="media-stage" class="media-stage"></div>
       <div id="grid" class="grid" role="listbox" aria-multiselectable="true" aria-label="Files" tabindex="0"></div>
     </main>
     <aside id="side" class="side"></aside>
   </div>
 
-  <div id="ctx-menu" class="ctx-menu" role="menu" hidden></div>
 
-  <dialog id="op-dialog" class="op-dialog"></dialog>
 
   <dialog id="browse-dialog" class="browse-dialog">
     <h2>Choose a folder</h2>

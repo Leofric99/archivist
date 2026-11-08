@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,41 @@ from .common import (PYEXIV2_LOCK, Cancelled, Context, Item, Operation, Operatio
 
 EXIF_IFD = 0x8769
 MAX_VALUE_LENGTH = 300
+
+
+def _copy_destination(path: Path) -> Path:
+    target = path.with_name(f"{path.stem}_archivist{path.suffix}")
+    n = 2
+    while target.exists():
+        target = path.with_name(f"{path.stem}_archivist_{n}{path.suffix}")
+        n += 1
+    return target
+
+
+def _save_targets(plan: Plan, params: dict) -> None:
+    if params.get("save_mode") not in {"copy", "overwrite"}:
+        return  # Preserve the CLI workflow.
+    destinations = {}
+    for item in plan.items:
+        if item.status != "ok":
+            continue
+        source = Path(item.source)
+        target = _copy_destination(source) if params["save_mode"] == "copy" else source
+        item.target = str(target)
+        destinations[str(source)] = str(target)
+    plan.options["save_targets"] = destinations
+    if params["save_mode"] == "copy":
+        plan.warnings = ["Changes will be saved to a new copy; the original is unchanged."]
+
+
+def _prepare_target(plan: Plan, path: Path) -> Path:
+    target = Path(plan.options.get("save_targets", {}).get(str(path), str(path)))
+    if target != path:
+        # Exclusive creation also protects against a file appearing after planning.
+        with target.open("xb") as output, path.open("rb") as source:
+            shutil.copyfileobj(source, output)
+        shutil.copystat(path, target)
+    return target
 
 
 def _short(value) -> str:
@@ -129,6 +165,10 @@ def plan_export(ctx: Context, files: list, params: dict, answers: dict) -> Plan:
         raise OperationError("Format must be csv, json or both.")
     out_dir = to_path(params.get("output_dir", ""))
     targets = [out_dir / f"metadata.{ext}" for ext in (("json", "csv") if fmt == "both" else (fmt,))]
+    if params.get("save_mode") in {"copy", "overwrite"} and len(files) == 1:
+        targets = [out_dir / f"{files[0].stem}_metadata.{t.suffix.lstrip('.')}" for t in targets]
+        if params["save_mode"] == "copy":
+            targets = [_copy_destination(t) if t.exists() else t for t in targets]
     plan = Plan(op="export_metadata")
     for f in sorted(files):
         if kind_of(f) == "image":
@@ -222,6 +262,7 @@ def plan_import(ctx: Context, files: list, params: dict, answers: dict) -> Plan:
     plan.summary = f"{len(payload)} of {len(plan.items)} file(s) match records in {meta_file.name}."
     if payload:
         plan.warnings.append("Metadata is written into the image files themselves.")
+    _save_targets(plan, params)
     return plan
 
 
@@ -231,6 +272,7 @@ def apply_import(ctx: Context, plan: Plan, rep: Reporter) -> None:
     for path, exif, iptc, xmp in plan.payload:
         rep.begin_item(path.name)
         try:
+            path = _prepare_target(plan, path)
             with PYEXIV2_LOCK, pyexiv2.Image(str(path)) as meta:
                 for tag, value in exif.items():
                     try:
@@ -285,6 +327,7 @@ def plan_clone(ctx: Context, files: list, params: dict, answers: dict) -> Plan:
     plan.summary = f"Metadata from {source.name} will be copied to {len(targets)} file(s)."
     if targets:
         plan.warnings.append("Existing EXIF/IPTC/XMP data and file timestamps of the targets will be overwritten.")
+    _save_targets(plan, params)
     return plan
 
 
@@ -298,6 +341,7 @@ def apply_clone(ctx: Context, plan: Plan, rep: Reporter) -> None:
     for target in targets:
         rep.begin_item(target.name)
         try:
+            target = _prepare_target(plan, target)
             with PYEXIV2_LOCK, pyexiv2.Image(str(target)) as dst:
                 dst.modify_exif(exif)
                 dst.modify_iptc(iptc)
